@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                date(datetime(created_at, 'unixepoch')) as stat_date,\n                COUNT(*) as total,\n                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,\n                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed\n            FROM publish_jobs\n            WHERE status IN ('success', 'failed')\n              AND created_at >= strftime('%s', 'now', ? || ' days')\n            GROUP BY stat_date\n            ORDER BY stat_date DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "stat_date",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "total",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "success",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "failed",
+        "ordinal": 3,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8fdc16637589ad71d6169c4b06553db0742707b87912f36a83a57446f042c734"
+}

@@ -1,0 +1,128 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, distribution_task_id, content_id, account_id, platform, status,\n                   priority, retry_count, max_retries, scheduled_at, started_at, completed_at,\n                   published_url, published_id, error_code, error_message, metadata,\n                   created_at, updated_at\n            FROM publish_jobs\n            WHERE status = 'pending'\n              AND (scheduled_at IS NULL OR scheduled_at <= ?)\n            ORDER BY priority DESC, created_at ASC\n            LIMIT ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "distribution_task_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "content_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "account_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "platform",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "priority",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "retry_count",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "max_retries",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "scheduled_at",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 10,
+        "type_info": "Integer"
+      },
+      {
+        "name": "completed_at",
+        "ordinal": 11,
+        "type_info": "Integer"
+      },
+      {
+        "name": "published_url",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "published_id",
+        "ordinal": 13,
+        "type_info": "Text"
+      },
+      {
+        "name": "error_code",
+        "ordinal": 14,
+        "type_info": "Text"
+      },
+      {
+        "name": "error_message",
+        "ordinal": 15,
+        "type_info": "Text"
+      },
+      {
+        "name": "metadata",
+        "ordinal": 16,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 17,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 18,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "11bd1d726495a4cfdbc0005a9d0d090f283ee63962c97cff70a7e4cfbc7d48fa"
+}

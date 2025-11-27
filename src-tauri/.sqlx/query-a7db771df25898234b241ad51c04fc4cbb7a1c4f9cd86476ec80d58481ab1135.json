@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO daily_statistics (stat_date, platform, account_id, total_publishes, successful_publishes, failed_publishes)\n            VALUES (?, ?, ?, 1, ?, ?)\n            ON CONFLICT (stat_date, platform, account_id) DO UPDATE SET\n                total_publishes = total_publishes + 1,\n                successful_publishes = successful_publishes + excluded.successful_publishes,\n                failed_publishes = failed_publishes + excluded.failed_publishes\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "a7db771df25898234b241ad51c04fc4cbb7a1c4f9cd86476ec80d58481ab1135"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT status FROM ai_configs WHERE platform = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "status",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "77bc940b72f626e2ea7aed6ead7564929f718e3bf1177f165b14b59e8b518763"
+}

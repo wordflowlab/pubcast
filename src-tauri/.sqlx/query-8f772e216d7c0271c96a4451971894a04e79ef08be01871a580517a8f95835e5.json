@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE proxies \n                SET status = ?, last_check_at = ?, last_check_ip = ?, \n                    last_check_location = ?, fail_count = 0, updated_at = ?\n                WHERE id = ?\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "8f772e216d7c0271c96a4451971894a04e79ef08be01871a580517a8f95835e5"
+}

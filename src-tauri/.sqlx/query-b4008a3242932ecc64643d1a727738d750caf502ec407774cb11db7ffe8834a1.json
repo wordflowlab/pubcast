@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT total_jobs, completed_jobs, failed_jobs FROM distribution_tasks WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "total_jobs",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "completed_jobs",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "failed_jobs",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b4008a3242932ecc64643d1a727738d750caf502ec407774cb11db7ffe8834a1"
+}

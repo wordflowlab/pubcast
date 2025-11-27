@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE distribution_tasks \n                SET failed_jobs = failed_jobs + 1, updated_at = ?\n                WHERE id = ?\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "618a8dc337902fd460ff6444fc262989b2f37233b18e1527c8fa24b2f2fc1e42"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT platform FROM accounts WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "platform",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "451113834eeb18b089a52d8df9d81948f32bde384b78f9dbd72313fa1468ff01"
+}

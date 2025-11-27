@@ -1,0 +1,104 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, content_id, name, status, target_accounts, schedule_type,\n                   scheduled_at, started_at, completed_at, total_jobs, completed_jobs,\n                   failed_jobs, error_message, created_at, updated_at\n            FROM distribution_tasks WHERE id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "content_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "target_accounts",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "schedule_type",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "scheduled_at",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "completed_at",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "total_jobs",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "completed_jobs",
+        "ordinal": 10,
+        "type_info": "Integer"
+      },
+      {
+        "name": "failed_jobs",
+        "ordinal": 11,
+        "type_info": "Integer"
+      },
+      {
+        "name": "error_message",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 13,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 14,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c1948f976d6f90e38c2ebabc5c80f75c78eb361fa45a8e0c20ffbff4a9e0668a"
+}

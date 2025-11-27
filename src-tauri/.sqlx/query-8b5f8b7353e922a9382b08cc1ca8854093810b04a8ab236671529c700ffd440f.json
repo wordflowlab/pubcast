@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                INSERT OR IGNORE INTO ai_configs (id, platform, status, created_at, updated_at)\n                VALUES (?, ?, 'inactive', ?, ?)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "8b5f8b7353e922a9382b08cc1ca8854093810b04a8ab236671529c700ffd440f"
+}

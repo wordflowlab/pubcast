@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO publish_jobs \n            (id, distribution_task_id, content_id, account_id, platform, status, scheduled_at, created_at, updated_at)\n            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "d8962f18387d60045d1eb9ec78ad8a685bf7fac17be273631c1ee165a8cf807d"
+}

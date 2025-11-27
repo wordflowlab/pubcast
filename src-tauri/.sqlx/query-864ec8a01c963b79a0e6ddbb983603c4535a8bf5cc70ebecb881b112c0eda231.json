@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE accounts\n            SET last_login_at = ?, status = 'active', error_message = NULL, updated_at = ?\n            WHERE id = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "864ec8a01c963b79a0e6ddbb983603c4535a8bf5cc70ebecb881b112c0eda231"
+}

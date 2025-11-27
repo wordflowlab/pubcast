@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                INSERT INTO ai_check_logs (id, platform, status, message, duration_ms, created_at)\n                VALUES (?, ?, ?, ?, ?, ?)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "cadab7a35259ae92dd24ef81f85264ab0f3b37ba6be26f59636f26ffb607a347"
+}

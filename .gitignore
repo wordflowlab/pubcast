@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Rust
+target/
+Cargo.lock
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Tauri
+src-tauri/target/
+
+# Test
+coverage/
+.nyc_output/
+
+# TypeScript
+*.tsbuildinfo
+
+# Playwright Sidecar
+playwright-sidecar/node_modules/
+playwright-sidecar/profiles/
+playwright-sidecar/*.log
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Generated
+src-tauri/gen/

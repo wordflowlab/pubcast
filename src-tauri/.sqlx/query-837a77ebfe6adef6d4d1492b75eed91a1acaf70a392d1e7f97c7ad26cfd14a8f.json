@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, platform, name, username, status,\n                   last_login_at, last_check_at, error_message,\n                   metadata, created_at, updated_at\n            FROM accounts\n            WHERE platform = ?\n            ORDER BY created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "platform",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "username",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_login_at",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_check_at",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "error_message",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "metadata",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 10,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "837a77ebfe6adef6d4d1492b75eed91a1acaf70a392d1e7f97c7ad26cfd14a8f"
+}

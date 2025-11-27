@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT retry_count, max_retries FROM publish_jobs WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "retry_count",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "max_retries",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "b899a788778809d441a0722c376872dbfc2a06c5c52e7dab0954612b80ae7603"
+}

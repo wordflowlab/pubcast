@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                INSERT INTO contents (id, remote_id, title, body, cover_image_url, tags,\n                    category, author, source_url, status, remote_status, remote_updated_at,\n                    local_updated_at, created_at, updated_at)\n                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 15
+    },
+    "nullable": []
+  },
+  "hash": "430ad2705b188f0b873b9381b94fe939b1e885ca9b40f9de50c6145c1e9cd01e"
+}

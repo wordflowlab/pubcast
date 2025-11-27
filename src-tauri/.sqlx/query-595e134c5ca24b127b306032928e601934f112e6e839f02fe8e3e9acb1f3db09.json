@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE publish_jobs \n                SET status = ?, retry_count = retry_count + 1, scheduled_at = ?,\n                    error_code = ?, error_message = ?, updated_at = ?\n                WHERE id = ?\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "595e134c5ca24b127b306032928e601934f112e6e839f02fe8e3e9acb1f3db09"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO publish_logs (id, publish_job_id, account_id, platform, status, duration_ms, error_message, created_at)\n            VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "ea550ce029d674578a9e4005235b8edf0fc056e03e9743a6984f0d8665e1b389"
+}

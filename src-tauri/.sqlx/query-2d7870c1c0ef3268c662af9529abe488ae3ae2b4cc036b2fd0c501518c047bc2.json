@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE distribution_tasks SET status = ?, completed_at = ?, updated_at = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "2d7870c1c0ef3268c662af9529abe488ae3ae2b4cc036b2fd0c501518c047bc2"
+}

@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                COUNT(*) as total,\n                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,\n                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,\n                AVG(CASE WHEN completed_at IS NOT NULL AND started_at IS NOT NULL \n                    THEN (completed_at - started_at) * 1000 ELSE NULL END) as avg_duration\n            FROM publish_jobs\n            WHERE status IN ('success', 'failed')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "total",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "success",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "failed",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "avg_duration",
+        "ordinal": 3,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a4e6fec472fcb9b242605c8d1abef32c0b88cce5f490035fc98613fbd3a933cd"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE ai_configs \n            SET status = ?, updated_at = ?\n            WHERE platform = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "537a62a61d71a3bb96c1d2adab74f75e93c21686858e795e0bc6ba1668129b5b"
+}

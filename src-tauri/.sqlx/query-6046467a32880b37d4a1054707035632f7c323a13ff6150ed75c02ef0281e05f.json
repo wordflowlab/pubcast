@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, platform, status, message, duration_ms, created_at\n            FROM ai_check_logs\n            ORDER BY created_at DESC\n            LIMIT ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "platform",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "message",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "duration_ms",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "6046467a32880b37d4a1054707035632f7c323a13ff6150ed75c02ef0281e05f"
+}

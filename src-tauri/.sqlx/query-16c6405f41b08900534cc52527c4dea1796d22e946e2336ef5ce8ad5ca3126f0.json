@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM ai_check_logs",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "16c6405f41b08900534cc52527c4dea1796d22e946e2336ef5ce8ad5ca3126f0"
+}

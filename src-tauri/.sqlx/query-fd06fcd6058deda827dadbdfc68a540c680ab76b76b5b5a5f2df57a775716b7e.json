@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT distribution_task_id FROM publish_jobs WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "distribution_task_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fd06fcd6058deda827dadbdfc68a540c680ab76b76b5b5a5f2df57a775716b7e"
+}

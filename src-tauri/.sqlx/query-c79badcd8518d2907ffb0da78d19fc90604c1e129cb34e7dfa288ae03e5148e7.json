@@ -1,0 +1,86 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, protocol, host, port, username, status,\n                   last_check_at, last_check_ip, last_check_location,\n                   fail_count, created_at, updated_at\n            FROM proxies\n            WHERE status = 'healthy'\n            ORDER BY fail_count ASC, last_check_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "protocol",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "host",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "port",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "username",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_check_at",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_check_ip",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_check_location",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "fail_count",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 10,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 11,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c79badcd8518d2907ffb0da78d19fc90604c1e129cb34e7dfa288ae03e5148e7"
+}

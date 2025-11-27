@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE contents SET\n                    title = ?, body = ?, cover_image_url = ?, tags = ?,\n                    category = ?, author = ?, source_url = ?, status = ?,\n                    remote_status = ?, remote_updated_at = ?, local_updated_at = ?, updated_at = ?\n                WHERE id = ?\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 13
+    },
+    "nullable": []
+  },
+  "hash": "ba84b0176f7e54c448669c862d3d57c3b75c8b9639e6e4c4be90e88849086adc"
+}

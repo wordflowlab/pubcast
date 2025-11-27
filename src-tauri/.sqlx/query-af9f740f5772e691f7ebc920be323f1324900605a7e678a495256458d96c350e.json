@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT platform FROM ai_configs WHERE status = 'active'",
+  "describe": {
+    "columns": [
+      {
+        "name": "platform",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "af9f740f5772e691f7ebc920be323f1324900605a7e678a495256458d96c350e"
+}

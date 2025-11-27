@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                platform,\n                COUNT(*) as total,\n                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,\n                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed\n            FROM publish_jobs\n            WHERE status IN ('success', 'failed')\n            GROUP BY platform\n            ORDER BY total DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "platform",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "total",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "success",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "failed",
+        "ordinal": 3,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4bda0debfec75ba3f4be8e5bbb8a01f35096ee84222f35fcddcfc76eceb59de0"
+}

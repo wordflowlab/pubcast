@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE publish_jobs SET status = ?, updated_at = ? WHERE distribution_task_id = ? AND status = 'pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "2a6ea0109568f7af5359672923de9d34ae00b66844c0b63171b71060fd86eed9"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO proxies (id, protocol, host, port, username, password_encrypted, password_nonce, status, created_at, updated_at)\n            VALUES (?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "c5f468e89468fa968c5f03c8279f73734af904ae61ec2dca45364fe53b47d4ff"
+}

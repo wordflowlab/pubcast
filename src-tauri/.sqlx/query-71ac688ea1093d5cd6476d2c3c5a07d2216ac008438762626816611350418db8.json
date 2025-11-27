@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT credentials_encrypted, credentials_nonce FROM accounts WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "credentials_encrypted",
+        "ordinal": 0,
+        "type_info": "Blob"
+      },
+      {
+        "name": "credentials_nonce",
+        "ordinal": 1,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "71ac688ea1093d5cd6476d2c3c5a07d2216ac008438762626816611350418db8"
+}
