@@ -9,7 +9,7 @@ dist-ssr/
 
 # Rust
 target/
-Cargo.lock
+# Cargo.lock should be committed for binary applications
 
 # IDE
 .idea/
