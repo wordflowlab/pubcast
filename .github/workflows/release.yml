@@ -51,6 +51,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # Use shared cache key across all tags/branches
+          shared-key: "rust-cache-${{ matrix.target }}"
+          # Cache even on workflow failure
+          cache-on-failure: true
 
       - name: Install dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-latest'
