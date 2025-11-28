@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::error::{PubCastError, Result};
 use crate::infrastructure::encryption::EncryptionService;
-use crate::models::{Account, AccountStatus, CreateAccountRequest, UpdateAccountRequest};
+use crate::models::{Account, AccountStatus, AuthStatus, CreateAccountRequest, UpdateAccountRequest};
 
 /// Account management service
 pub struct AccountService {
@@ -47,6 +47,9 @@ impl AccountService {
                 metadata: row.metadata.as_ref().and_then(|m| serde_json::from_str(m).ok()),
                 created_at: row.created_at,
                 updated_at: row.updated_at,
+                auth_status: AuthStatus::default(),
+                profile_id: None,
+                last_auth_sync_at: None,
             })
             .collect();
 
@@ -83,6 +86,9 @@ impl AccountService {
                 metadata: row.metadata.as_ref().and_then(|m| serde_json::from_str(m).ok()),
                 created_at: row.created_at,
                 updated_at: row.updated_at,
+                auth_status: AuthStatus::default(),
+                profile_id: None,
+                last_auth_sync_at: None,
             })
             .collect();
 
@@ -116,6 +122,9 @@ impl AccountService {
             metadata: row.metadata.as_ref().and_then(|m| serde_json::from_str(m).ok()),
             created_at: row.created_at,
             updated_at: row.updated_at,
+            auth_status: AuthStatus::default(),
+            profile_id: None,
+            last_auth_sync_at: None,
         })
     }
 

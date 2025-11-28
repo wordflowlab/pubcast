@@ -1,188 +1,351 @@
-import { useState, useEffect } from "react";
-import { RefreshCw } from "lucide-react";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { listAIConfigs, toggleAIAuth } from "@/lib/tauri";
-import type { AIConfig } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { useState, useEffect, useCallback } from "react";
+import { 
+  listAccounts, 
+  addAccount, 
+  deleteAccount,
+  launchBrowser, 
+  browserNavigate, 
+  browserHealthCheck, 
+  syncAuthFromBrowser,
+  browserClose,
+  browserGetSessions,
+  type Account,
+  type BrowserSession
+} from "@/lib/tauri";
+import { cn, formatRelativeTime } from "@/lib/utils";
+import { 
+  AlertCircle, 
+  CheckCircle2, 
+  Clock, 
+  RefreshCw, 
+  Trash2,
+  Loader2,
+  Plus,
+  Monitor
+} from "lucide-react";
 
-const AI_PLATFORMS = [
-  { id: "deepseek", name: "deepseek", url: "https://platform.deepseek.com/" },
-  { id: "doubao", name: "豆包", url: "https://www.doubao.com/" },
-  { id: "yuanbao", name: "元宝", url: "https://yuanbao.tencent.com/" },
-  { id: "tongyi", name: "通义千问", url: "https://tongyi.aliyun.com/" },
-  { id: "wenxin", name: "文心一言", url: "https://yiyan.baidu.com/" },
-  { id: "nanmi", name: "纳迷", url: "https://namic.ai/" },
-  { id: "kimi", name: "kimi", url: "https://kimi.moonshot.cn/" },
-  { id: "zhipu", name: "智谱清言", url: "https://chatglm.cn/" },
-];
-
-// Open AI platform in internal webview
-async function openAIPlatform(platform: { id: string; name: string; url: string }) {
-  const webview = new WebviewWindow(`ai-${platform.id}`, {
-    url: platform.url,
-    title: `${platform.name} - 获取API Key`,
-    width: 1000,
-    height: 700,
-    center: true,
-  });
-  
-  webview.once("tauri://error", (e) => {
-    console.error("Failed to open webview:", e);
-  });
+// AI Platform definitions
+interface Platform {
+  id: string;
+  name: string;
+  color: string;
+  loginUrl: string;
+  homeUrl: string;
 }
 
+const AI_PLATFORMS: Platform[] = [
+  { id: "deepseek", name: "DeepSeek", color: "bg-blue-600", loginUrl: "https://chat.deepseek.com/", homeUrl: "https://chat.deepseek.com/" },
+  { id: "doubao", name: "豆包", color: "bg-blue-500", loginUrl: "https://www.doubao.com/", homeUrl: "https://www.doubao.com/" },
+  { id: "yuanbao", name: "元宝", color: "bg-yellow-500", loginUrl: "https://yuanbao.tencent.com/", homeUrl: "https://yuanbao.tencent.com/" },
+  { id: "qwen", name: "通义千问", color: "bg-purple-600", loginUrl: "https://tongyi.aliyun.com/qianwen/", homeUrl: "https://tongyi.aliyun.com/qianwen/" },
+  { id: "wenxin", name: "文心一言", color: "bg-blue-400", loginUrl: "https://yiyan.baidu.com/", homeUrl: "https://yiyan.baidu.com/" },
+  { id: "kimi", name: "Kimi", color: "bg-purple-500", loginUrl: "https://kimi.moonshot.cn/", homeUrl: "https://kimi.moonshot.cn/" },
+  { id: "zhipu", name: "智谱清言", color: "bg-blue-500", loginUrl: "https://chatglm.cn/", homeUrl: "https://chatglm.cn/" },
+  { id: "chatgpt", name: "ChatGPT", color: "bg-green-500", loginUrl: "https://chat.openai.com/", homeUrl: "https://chat.openai.com/" },
+  { id: "claude", name: "Claude", color: "bg-orange-500", loginUrl: "https://claude.ai/", homeUrl: "https://claude.ai/" },
+  { id: "gemini", name: "Gemini", color: "bg-blue-600", loginUrl: "https://gemini.google.com/", homeUrl: "https://gemini.google.com/" },
+];
+
+const AI_PLATFORM_IDS = new Set(AI_PLATFORMS.map(p => p.id));
+
 export function AIAuth() {
-  const [configs, setConfigs] = useState<Record<string, AIConfig>>({});
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [activeSessions, setActiveSessions] = useState<BrowserSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [sidecarOnline, setSidecarOnline] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadConfigs();
-  }, []);
-
-  async function loadConfigs() {
+  // Load accounts and sessions
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await listAIConfigs();
-      const configMap = data.reduce((acc, curr) => {
-        acc[curr.platform] = curr;
-        return acc;
-      }, {} as Record<string, AIConfig>);
-      setConfigs(configMap);
+      
+      // Check sidecar health
+      const isHealthy = await browserHealthCheck().catch(() => false);
+      setSidecarOnline(isHealthy);
+      
+      if (!isHealthy) {
+        setError("Playwright 服务未启动");
+      } else {
+        setError(null);
+      }
+
+      // Load accounts from DB
+      const data = await listAccounts();
+      // Filter for AI accounts only
+      const aiAccounts = data.filter(acc => AI_PLATFORM_IDS.has(acc.platform));
+      setAccounts(aiAccounts);
+
+      // Load active sessions if sidecar is up
+      if (isHealthy) {
+        const sessions = await browserGetSessions();
+        setActiveSessions(sessions);
+      }
+      
     } catch (e) {
-      console.error("Failed to load AI configs:", e);
+      setError(e instanceof Error ? e.message : "加载失败");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function handleToggleAuth(platform: string) {
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(async () => {
+      if (sidecarOnline) {
+        try {
+          const sessions = await browserGetSessions();
+          setActiveSessions(sessions);
+        } catch {}
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [loadData, sidecarOnline]);
+
+  // Add new account
+  const handleAddAccount = async (platform: Platform) => {
     try {
-      const updated = await toggleAIAuth(platform);
-      setConfigs(prev => ({ ...prev, [platform]: updated }));
+      setActionLoading("creating-" + platform.id);
+      const newAccount = await addAccount(platform.id, `${platform.name}-未命名`);
+      setAccounts(prev => [newAccount, ...prev]);
+      await handleLaunch(newAccount, platform, true);
     } catch (e) {
-      console.error("Failed to toggle auth:", e);
+      alert(`创建失败: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setActionLoading(null);
     }
-  }
+  };
+
+  // Launch browser
+  const handleLaunch = async (account: Account, platform: Platform, isAuth = false) => {
+    if (!sidecarOnline) {
+      alert("Playwright 服务未启动");
+      return;
+    }
+
+    try {
+      setActionLoading(account.id);
+      
+      const launchResult = await launchBrowser(account.id, platform.id, undefined, false);
+      if (!launchResult.success) throw new Error(launchResult.error);
+
+      const url = isAuth ? platform.loginUrl : platform.homeUrl;
+      const navResult = await browserNavigate(account.id, url);
+      if (!navResult.success) throw new Error(navResult.error);
+
+      const sessions = await browserGetSessions();
+      setActiveSessions(sessions);
+      
+    } catch (e) {
+      alert(`启动失败: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Confirm auth
+  const handleConfirmAuth = async (account: Account) => {
+    try {
+      setActionLoading(account.id);
+      const result = await syncAuthFromBrowser(account.id);
+      if (!result.success) throw new Error(result.error);
+
+      await browserClose(account.id);
+      await loadData(); // Reload to get updated status
+      
+    } catch (e) {
+      alert(`同步失败: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Delete account
+  const handleDelete = async (account: Account) => {
+    if (!confirm(`确定要删除账号 "${account.name}" 吗？`)) return;
+    try {
+      if (activeSessions.some(s => s.accountId === account.id)) {
+        await browserClose(account.id);
+      }
+      await deleteAccount(account.id);
+      setAccounts(prev => prev.filter(a => a.id !== account.id));
+    } catch (e) {
+      alert(`删除失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
 
   return (
     <div className="space-y-6">
+      {/* Sidecar Status */}
+      {!sidecarOnline && !loading && (
+        <div className="flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 p-4 text-amber-700">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium">Playwright 服务未启动</p>
+            <p className="text-sm">请在 playwright-sidecar 目录运行 <code className="bg-amber-100 px-1 rounded">npm start</code></p>
+          </div>
+          <button onClick={loadData} className="flex items-center gap-1 text-sm font-medium hover:underline">
+            <RefreshCw className="h-4 w-4" /> 重试
+          </button>
+        </div>
+      )}
+
+      {/* Error Alert */}
+      {error && (
+        <div className="flex items-center gap-3 rounded-lg bg-red-50 border border-red-200 p-4 text-red-700">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium">加载失败</p>
+            <p className="text-sm">{error}</p>
+          </div>
+          <button onClick={() => setError(null)} className="text-sm underline hover:no-underline">
+            关闭
+          </button>
+        </div>
+      )}
+
       {/* Platform Selection */}
       <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-        <div className="mb-4">
-          <h3 className="text-base font-medium text-slate-800">选择 AI 平台</h3>
-          <p className="text-sm text-slate-500 mt-1">选择需要授权的 AI 平台</p>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-          {AI_PLATFORMS.map((platform) => {
-            const config = configs[platform.id];
-            const isActive = config?.status === "active";
-            
-            return (
-              <div 
-                key={platform.id}
-                className={cn(
-                  "group relative flex flex-col rounded-lg border bg-white p-4 transition-all hover:shadow-md",
-                  isActive ? "border-green-200 bg-green-50/30" : "border-gray-100 hover:border-blue-200"
-                )}
-              >
-                <div 
-                  className="flex w-full cursor-pointer items-center gap-3"
-                  onClick={() => openAIPlatform(platform)}
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 font-bold">
-                    {platform.name[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-slate-700 group-hover:text-blue-600">
-                      {platform.name}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      点击前往登录
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="mt-3 flex w-full items-center justify-between border-t border-gray-100 pt-3">
-                  <div className="flex items-center gap-1">
-                    <span className={cn("inline-block h-1.5 w-1.5 rounded-full", isActive ? "bg-green-500" : "bg-slate-300")}></span>
-                    <span className={cn("text-xs", isActive ? "text-green-600" : "text-slate-400")}>
-                      {isActive ? "已开通" : "未开通"}
-                    </span>
-                  </div>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleAuth(platform.id);
-                    }}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    {isActive ? "关闭" : "开通"}
-                  </button>
-                </div>
+        <h3 className="mb-4 text-base font-medium text-slate-800">选择 AI 平台</h3>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {AI_PLATFORMS.map((platform) => (
+            <button 
+              key={platform.id}
+              onClick={() => handleAddAccount(platform)}
+              disabled={!!actionLoading || !sidecarOnline}
+              className="group flex cursor-pointer items-center gap-3 rounded-lg border border-gray-100 bg-white p-3 transition-all hover:border-blue-200 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-left min-w-0"
+            >
+              <div className={cn("flex h-8 w-8 items-center justify-center rounded-full text-white text-xs font-bold shrink-0", platform.color)}>
+                {platform.name.substring(0, 1)}
               </div>
-            );
-          })}
+              <span className="text-sm font-medium text-slate-700 group-hover:text-blue-600 flex-1 whitespace-nowrap">
+                {actionLoading === "creating-" + platform.id ? "创建中..." : platform.name}
+              </span>
+              <Plus className="h-4 w-4 ml-auto text-slate-300 group-hover:text-blue-500 shrink-0" />
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Auth List */}
-      <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 min-h-[400px] flex flex-col">
-        <div className="mb-6 flex items-center justify-between">
+      <div className="rounded-xl bg-white shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between border-b border-gray-100 p-4">
           <h3 className="text-base font-medium text-slate-800">授权列表</h3>
-          <button 
-            onClick={loadConfigs}
-            className="flex items-center gap-2 rounded-md bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 transition-colors"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-            刷新
+          <button onClick={loadData} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+            <RefreshCw className="h-4 w-4" /> 刷新
           </button>
         </div>
 
-        <div className="flex-1 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平台</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">授权时间</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {Object.values(configs).filter(c => c.status === "active").map((config) => (
-                <tr key={config.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {AI_PLATFORMS.find(p => p.id === config.platform)?.name || config.platform}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                      已开通
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(config.updated_at * 1000).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button 
-                      onClick={() => handleToggleAuth(config.platform)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      停用
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {Object.values(configs).every(c => c.status !== "active") && (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 text-slate-500">
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
-                    暂无授权记录，请先在上访选择平台进行授权
-                  </td>
+                  <th className="px-6 py-4 font-medium">账号信息</th>
+                  <th className="px-6 py-4 font-medium">平台</th>
+                  <th className="px-6 py-4 font-medium">授权状态</th>
+                  <th className="px-6 py-4 font-medium">最后更新</th>
+                  <th className="px-6 py-4 font-medium text-right">操作</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {accounts.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                      暂无授权记录，请先在上访选择平台进行授权
+                    </td>
+                  </tr>
+                ) : (
+                  accounts.map((account) => {
+                    const platform = AI_PLATFORMS.find(p => p.id === account.platform);
+                    const isActive = activeSessions.some(s => s.accountId === account.id);
+                    const isAuthorized = account.auth_status === "authorized";
+                    const isLoading = actionLoading === account.id;
+
+                    return (
+                      <tr key={account.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={cn("flex h-8 w-8 items-center justify-center rounded-full text-white text-xs font-bold", platform?.color || "bg-slate-400")}>
+                              {account.name.substring(0, 1)}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-slate-900">{account.name}</span>
+                              {account.username && (
+                                <span className="text-xs text-slate-500">@{account.username}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          {platform?.name || account.platform}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {isAuthorized ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                                <CheckCircle2 className="h-3 w-3" />
+                                已授权
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">
+                                <AlertCircle className="h-3 w-3" />
+                                未授权
+                              </span>
+                            )}
+                            {isActive && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20 animate-pulse">
+                                <Monitor className="h-3 w-3" />
+                                运行中
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-500">
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatRelativeTime(account.updated_at * 1000)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {isActive ? (
+                              <>
+                                {!isAuthorized ? (
+                                  <button onClick={() => handleConfirmAuth(account)} disabled={isLoading} className="text-green-600 hover:text-green-700 font-medium text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50">
+                                    {isLoading ? "保存中..." : "确认登录"}
+                                  </button>
+                                ) : (
+                                  <button onClick={() => browserClose(account.id).then(loadData)} disabled={isLoading} className="text-slate-600 hover:text-slate-700 font-medium text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50">
+                                    关闭浏览器
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => platform && handleLaunch(account, platform, !isAuthorized)} disabled={isLoading || !sidecarOnline} className="text-blue-600 hover:text-blue-700 font-medium text-xs px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 disabled:opacity-50">
+                                  {isLoading ? "启动中..." : (isAuthorized ? "打开" : "去授权")}
+                                </button>
+                                <button onClick={() => handleDelete(account)} disabled={isLoading} className="text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

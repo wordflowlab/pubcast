@@ -23,6 +23,9 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             name: macOS-arm64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: Windows-x64
 
     runs-on: ${{ matrix.platform }}
     
@@ -45,9 +48,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          # Use shared cache key across all tags/branches
           shared-key: "rust-cache-${{ matrix.target }}"
-          # Cache even on workflow failure
           cache-on-failure: true
 
       - name: Install dependencies (Ubuntu)
@@ -75,9 +76,11 @@ jobs:
             - 反检测指纹伪装
             - 代理池管理
             - 账号管理
+            - AI 大模型多账户管理
             
             ### Downloads
             - **macOS (Apple Silicon)**: `PubCast_*_aarch64.dmg`
+            - **Windows (64-bit)**: `PubCast_*_x64-setup.exe` 或 `PubCast_*_x64_en-US.msi`
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}

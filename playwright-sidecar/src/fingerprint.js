@@ -175,20 +175,31 @@ function getTimezoneOffset(timezone) {
 
 /**
  * Apply fingerprint to Playwright context options
+ * 
+ * Note: When using viewport: null (real window size), do NOT set:
+ * - viewport
+ * - deviceScaleFactor
+ * These are incompatible with launchPersistentContext + viewport: null
  */
-export function applyFingerprintToContext(fingerprint) {
-  return {
+export function applyFingerprintToContext(fingerprint, options = {}) {
+  const contextOptions = {
     userAgent: fingerprint.navigator.userAgent,
-    viewport: {
-      width: fingerprint.screen.width,
-      height: fingerprint.screen.height,
-    },
-    deviceScaleFactor: fingerprint.screen.devicePixelRatio,
     locale: fingerprint.navigator.language,
     timezoneId: fingerprint.timezone.id,
     permissions: ['geolocation'],
     geolocation: getGeolocationFromTimezone(fingerprint.timezone.id),
   };
+  
+  // Only set viewport/deviceScaleFactor if NOT using null viewport
+  if (options.useFixedViewport) {
+    contextOptions.viewport = {
+      width: fingerprint.screen.width,
+      height: fingerprint.screen.height,
+    };
+    contextOptions.deviceScaleFactor = fingerprint.screen.devicePixelRatio;
+  }
+  
+  return contextOptions;
 }
 
 /**

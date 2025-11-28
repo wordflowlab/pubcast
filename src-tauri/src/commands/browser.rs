@@ -16,6 +16,7 @@ pub async fn browser_health_check(state: State<'_, AppState>) -> Result<bool, St
 pub async fn launch_browser(
     state: State<'_, AppState>,
     account_id: String,
+    platform_id: String,
     proxy_id: Option<String>,
     headless: bool,
 ) -> Result<BrowserResponse, String> {
@@ -29,7 +30,7 @@ pub async fn launch_browser(
 
     let browser_service = state.browser_service.read().await;
     browser_service
-        .launch_browser(&account_id, proxy.as_ref(), headless)
+        .launch_browser(&account_id, &platform_id, proxy.as_ref(), headless)
         .await
         .map_err(|e| e.to_string())
 }

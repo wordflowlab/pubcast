@@ -12,7 +12,12 @@ import type {
   Content,
   DistributionTask,
   CreateDistributionTaskRequest,
+  PublishStats,
+  PlatformStats,
+  Statistics,
 } from "./types";
+
+export type { Account };
 
 // ============ Proxy Commands ============
 
@@ -132,6 +137,20 @@ export async function cancelDistributionTask(id: string): Promise<void> {
   return invoke("cancel_distribution_task", { id });
 }
 
+// ============ Stats Commands ============
+
+export async function getOverallStats(): Promise<PublishStats> {
+  return invoke("get_overall_stats");
+}
+
+export async function getPlatformStats(): Promise<PlatformStats[]> {
+  return invoke("get_platform_stats");
+}
+
+export async function getDailyStats(days?: number): Promise<Statistics[]> {
+  return invoke("get_daily_stats", { days });
+}
+
 // ============ AI Commands ============
 
 export async function listAIConfigs(): Promise<AIConfig[]> {
@@ -180,11 +199,12 @@ export async function browserHealthCheck(): Promise<boolean> {
 }
 
 export async function launchBrowser(
-  accountId: string,
-  proxyId?: string,
+  accountId: String,
+  platformId: String,
+  proxyId?: String,
   headless: boolean = false
 ): Promise<BrowserResponse> {
-  return invoke("launch_browser", { accountId, proxyId, headless });
+  return invoke("launch_browser", { accountId, platformId, proxyId, headless });
 }
 
 export async function browserNavigate(
@@ -216,6 +236,49 @@ export async function browserGetSessions(): Promise<BrowserSession[]> {
 
 export async function browserCloseAll(): Promise<BrowserResponse> {
   return invoke("browser_close_all");
+}
+
+// ============ Auth Commands (for cross-device migration) ============
+
+export interface AuthBackup {
+  platform: string;
+  profile_id: string;
+  cookies: unknown;
+  fingerprint: unknown;
+  exported_at: number;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  error?: string;
+}
+
+export async function syncAuthFromBrowser(platform: string): Promise<AuthResponse> {
+  return invoke("sync_auth_from_browser", { platform });
+}
+
+export async function updateAuthStatus(platform: string, authStatus: string): Promise<AuthResponse> {
+  return invoke("update_auth_status", { platform, authStatus });
+}
+
+export async function getAuthStatus(platform: string): Promise<string> {
+  return invoke("get_auth_status", { platform });
+}
+
+export async function exportAuthBackups(): Promise<AuthBackup[]> {
+  return invoke("export_auth_backups");
+}
+
+export async function importAuthBackup(backup: AuthBackup): Promise<AuthResponse> {
+  return invoke("import_auth_backup", { backup });
+}
+
+export async function clearAuth(platform: string): Promise<AuthResponse> {
+  return invoke("clear_auth", { platform });
+}
+
+export async function restoreAuthToBrowser(platform: string): Promise<AuthResponse> {
+  return invoke("restore_auth_to_browser", { platform });
 }
 
 // ============ Utility Commands ============

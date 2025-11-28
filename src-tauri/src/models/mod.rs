@@ -8,7 +8,7 @@ pub mod content;
 pub mod proxy;
 pub mod publish;
 
-pub use account::{Account, AccountStatus, CreateAccountRequest, UpdateAccountRequest};
+pub use account::{Account, AccountStatus, AuthBackup, AuthStatus, CreateAccountRequest, UpdateAccountRequest};
 pub use ai::{AIConfig, AICheckLog, AIPlatformStatus};
 pub use content::{Content, ContentStatus, RemoteContent, RemoteContentListResponse};
 pub use proxy::{

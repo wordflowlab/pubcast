@@ -43,6 +43,39 @@ impl std::str::FromStr for AccountStatus {
     }
 }
 
+/// Auth status enum - for browser session authorization
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthStatus {
+    Authorized,  // Successfully logged in
+    Expired,     // Session expired
+    #[default]
+    None,        // Not authorized yet
+}
+
+impl std::fmt::Display for AuthStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Authorized => write!(f, "authorized"),
+            Self::Expired => write!(f, "expired"),
+            Self::None => write!(f, "none"),
+        }
+    }
+}
+
+impl std::str::FromStr for AuthStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "authorized" => Ok(Self::Authorized),
+            "expired" => Ok(Self::Expired),
+            "none" => Ok(Self::None),
+            _ => Err(format!("Unknown auth status: {}", s)),
+        }
+    }
+}
+
 /// Platform account
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
@@ -57,6 +90,21 @@ pub struct Account {
     pub metadata: Option<serde_json::Value>,
     pub created_at: i64,
     pub updated_at: i64,
+    // Auth backup fields for cross-device migration
+    #[serde(default)]
+    pub auth_status: AuthStatus,
+    pub profile_id: Option<String>,
+    pub last_auth_sync_at: Option<i64>,
+}
+
+/// Auth backup data for export/import
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthBackup {
+    pub platform: String,
+    pub profile_id: String,
+    pub cookies: serde_json::Value,      // Decrypted cookies
+    pub fingerprint: serde_json::Value,  // Decrypted fingerprint
+    pub exported_at: i64,
 }
 
 /// Account creation request

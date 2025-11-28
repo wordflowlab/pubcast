@@ -18,7 +18,7 @@ use tokio::sync::RwLock;
 
 use infrastructure::database::{DatabaseConfig, init_database};
 use infrastructure::encryption::{EncryptionService, KeychainService};
-use services::{AccountService, AIService, BrowserService, ContentService, ContentApiConfig, ProxyService, SchedulerService, StatsService};
+use services::{AccountService, AIService, AuthService, BrowserService, ContentService, ContentApiConfig, ProxyService, SchedulerService, StatsService};
 
 /// Application state shared across commands
 pub struct AppState {
@@ -31,6 +31,7 @@ pub struct AppState {
     pub stats_service: Arc<RwLock<StatsService>>,
     pub ai_service: Arc<RwLock<AIService>>,
     pub browser_service: Arc<RwLock<BrowserService>>,
+    pub auth_service: Arc<RwLock<AuthService>>,
 }
 
 impl AppState {
@@ -73,6 +74,10 @@ impl AppState {
         let stats_service = Arc::new(RwLock::new(StatsService::new(db.clone())));
         let ai_service = Arc::new(RwLock::new(AIService::new(db.clone())));
         let browser_service = Arc::new(RwLock::new(BrowserService::new()));
+        let auth_service = Arc::new(RwLock::new(AuthService::new(
+            db.clone(),
+            encryption.clone(),
+        )));
 
         Ok(Self {
             db,
@@ -84,6 +89,7 @@ impl AppState {
             stats_service,
             ai_service,
             browser_service,
+            auth_service,
         })
     }
 }
@@ -172,6 +178,14 @@ pub fn run() {
             commands::browser_close,
             commands::browser_get_sessions,
             commands::browser_close_all,
+            // Auth commands (for cross-device migration)
+            commands::sync_auth_from_browser,
+            commands::update_auth_status,
+            commands::get_auth_status,
+            commands::export_auth_backups,
+            commands::import_auth_backup,
+            commands::clear_auth,
+            commands::restore_auth_to_browser,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

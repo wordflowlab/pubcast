@@ -12,6 +12,8 @@ const SIDECAR_URL: &str = "http://localhost:3002";
 pub struct LaunchBrowserRequest {
     #[serde(rename = "accountId")]
     pub account_id: String,
+    #[serde(rename = "platformId")]
+    pub platform_id: String,
     pub proxy: Option<ProxyConfig>,
     pub headless: bool,
 }
@@ -106,6 +108,7 @@ impl BrowserService {
     pub async fn launch_browser(
         &self,
         account_id: &str,
+        platform_id: &str,
         proxy: Option<&Proxy>,
         headless: bool,
     ) -> Result<BrowserResponse> {
@@ -113,6 +116,7 @@ impl BrowserService {
         
         let request = LaunchBrowserRequest {
             account_id: account_id.to_string(),
+            platform_id: platform_id.to_string(),
             proxy: proxy.map(ProxyConfig::from),
             headless,
         };

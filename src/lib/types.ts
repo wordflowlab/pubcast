@@ -23,6 +23,8 @@ export interface AICheckLog {
   created_at: number;
 }
 
+export type AuthStatus = "authorized" | "expired" | "none";
+
 export interface Account {
   id: string;
   platform: string;
@@ -35,6 +37,10 @@ export interface Account {
   metadata: Record<string, unknown> | null;
   created_at: number;
   updated_at: number;
+  // Auth backup fields
+  auth_status: AuthStatus;
+  profile_id: string | null;
+  last_auth_sync_at: number | null;
 }
 
 // Proxy types
@@ -178,4 +184,19 @@ export interface Statistics {
   successful_publishes: number;
   failed_publishes: number;
   avg_duration_ms: number | null;
+}
+
+export interface PublishStats {
+  total_publishes: number;
+  successful_publishes: number;
+  failed_publishes: number;
+  success_rate: number;
+  avg_duration_ms: number | null;
+}
+
+export interface PlatformStats {
+  platform: string;
+  total_publishes: number;
+  successful_publishes: number;
+  failed_publishes: number;
 }

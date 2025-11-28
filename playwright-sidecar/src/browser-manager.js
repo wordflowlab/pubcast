@@ -1,23 +1,144 @@
 /**
  * Browser Manager
  * Manages browser instances with isolated profiles, proxies, and fingerprints
+ * 
+ * 🔥 Anti-detection features inspired by playwright-mcp:
+ * - assistantMode: true (official Playwright anti-detection)
+ * - channel: 'chrome' (real Chrome instead of Chromium)
+ * - launchPersistentContext (persistent user data)
+ * - Internal API calls to avoid tracing
+ * - Human behavior simulation
+ * - Cloudflare challenge handling
  */
 
-import { chromium } from 'playwright-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { chromium } from 'playwright';
 import path from 'path';
+import os from 'os';
 import fs from 'fs-extra';
-import { v4 as uuidv4 } from 'uuid';
+import net from 'net';
 import { generateFingerprint, applyFingerprintToContext, generateStealthScripts } from './fingerprint.js';
-
-// Add stealth plugin
-chromium.use(StealthPlugin());
 
 // Store active browser instances
 const activeBrowsers = new Map();
 
 // Base directory for browser profiles
 const PROFILES_DIR = path.join(process.cwd(), 'profiles');
+
+/**
+ * 🔥 Key anti-detection: Use internal API to avoid tracing
+ */
+async function callOnPageNoTrace(page, callback) {
+  if (page._wrapApiCall) {
+    return await page._wrapApiCall(() => callback(page), { internal: true });
+  }
+  return await callback(page);
+}
+
+/**
+ * 🔥 Human behavior simulation
+ */
+async function humanDelay(min = 100, max = 300) {
+  const delay = Math.random() * (max - min) + min;
+  await new Promise(resolve => setTimeout(resolve, delay));
+}
+
+/**
+ * 🔥 Simulate human mouse movement
+ */
+async function simulateHumanBehavior(page) {
+  try {
+    const x = Math.random() * 800 + 100;
+    const y = Math.random() * 600 + 100;
+    const steps = Math.floor(Math.random() * 10) + 5;
+    
+    await callOnPageNoTrace(page, async (p) => {
+      await p.mouse.move(x, y, { steps });
+    });
+    
+    await humanDelay(500, 1500);
+  } catch (e) {
+    // Ignore errors from mouse movement
+  }
+}
+
+/**
+ * 🔥 Cloudflare challenge detection
+ */
+async function isCloudflareChallenge(page) {
+  try {
+    return await callOnPageNoTrace(page, async (p) => {
+      const title = await p.title();
+      const url = p.url();
+      const content = await p.content();
+      
+      const titleCheck = title.includes('Just a moment') || 
+                        title.includes('Please wait') ||
+                        title.includes('Checking your browser');
+      
+      const urlCheck = url.includes('challenge-platform') ||
+                      url.includes('cf_challenge');
+      
+      const contentCheck = content.includes('cf-browser-verification') ||
+                          content.includes('checking your browser') ||
+                          content.includes('Ray ID:');
+      
+      return titleCheck || urlCheck || contentCheck;
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 🔥 Handle Cloudflare challenge with human simulation
+ */
+async function handleCloudflareChallenge(page) {
+  try {
+    console.log('🔍 Cloudflare challenge detected, waiting...');
+    
+    await simulateHumanBehavior(page);
+    
+    let attempts = 0;
+    const maxAttempts = 12; // 60 seconds
+    
+    while (attempts < maxAttempts) {
+      const isStillChallenge = await isCloudflareChallenge(page);
+      
+      if (!isStillChallenge) {
+        console.log('✅ Cloudflare challenge passed');
+        await humanDelay(1000, 2000);
+        return true;
+      }
+      
+      if (attempts % 3 === 0) {
+        await simulateHumanBehavior(page);
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      attempts++;
+      console.log(`🔄 Waiting for Cloudflare... (${attempts}/${maxAttempts})`);
+    }
+    
+    return false;
+  } catch (error) {
+    console.warn('⚠️ Cloudflare handling error:', error);
+    return false;
+  }
+}
+
+/**
+ * Find a free port
+ */
+async function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(0, () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
+}
 
 /**
  * Ensure profiles directory exists
@@ -69,24 +190,19 @@ async function loadCookies(accountId) {
 }
 
 /**
- * Save local storage for an account
- */
-async function saveLocalStorage(accountId, localStorage) {
-  const storagePath = path.join(getProfilePath(accountId), 'localStorage.json');
-  await fs.writeJson(storagePath, localStorage, { spaces: 2 });
-}
-
-/**
  * Launch a browser instance for an account
  * 
+ * 🔥 Uses launchPersistentContext with anti-detection settings
+ * 
  * @param {Object} options
- * @param {string} options.accountId - Unique account identifier
+ * @param {string} options.accountId - Unique account identifier (UUID)
+ * @param {string} options.platformId - Platform identifier (e.g., 'netease', 'toutiao')
  * @param {Object} options.proxy - Proxy configuration { host, port, username, password }
  * @param {boolean} options.headless - Run in headless mode
  * @returns {Object} Browser session info
  */
 export async function launchBrowser(options) {
-  const { accountId, proxy, headless = false } = options;
+  const { accountId, platformId, proxy, headless = false } = options;
   
   await ensureProfilesDir();
   
@@ -98,69 +214,117 @@ export async function launchBrowser(options) {
   
   // Load or create fingerprint
   const fingerprint = await loadOrCreateFingerprint(accountId);
-  const contextOptions = applyFingerprintToContext(fingerprint);
+  const fingerprintOptions = applyFingerprintToContext(fingerprint);
   
-  // Configure proxy if provided
-  if (proxy) {
-    contextOptions.proxy = {
-      server: `${proxy.protocol || 'http'}://${proxy.host}:${proxy.port}`,
-    };
-    if (proxy.username && proxy.password) {
-      contextOptions.proxy.username = proxy.username;
-      contextOptions.proxy.password = proxy.password;
-    }
-  }
+  // User data directory for persistent context
+  const userDataDir = getProfilePath(accountId);
+  await fs.ensureDir(userDataDir);
   
-  // Browser launch options
-  const launchOptions = {
-    headless,
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      '--disable-features=IsolateOrigins,site-per-process',
-      '--disable-site-isolation-trials',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--disable-gpu',
-      '--window-size=1920,1080',
-      '--start-maximized',
-    ],
-  };
+  // Find a free CDP port
+  const cdpPort = await findFreePort();
   
   try {
-    console.log(`[BrowserManager] Launching browser for account ${accountId}...`);
+    console.log(`[BrowserManager] 🚀 Launching browser for account ${accountId} (${platformId || 'unknown'})...`);
+    console.log(`[BrowserManager] 📁 User data dir: ${userDataDir}`);
     
-    // Launch browser
-    const browser = await chromium.launch(launchOptions);
+    // 🔥 Key anti-detection launch options (from playwright-mcp)
+    const launchOptions = {
+      // 🔥 Key 1: Use real Chrome instead of Chromium
+      channel: 'chrome',
+      
+      // 🔥 Key 2: Headless mode
+      headless,
+      
+      // 🔥 Key 3: Enable sandbox (more realistic)
+      chromiumSandbox: true,
+      
+      // 🔥 Key 4: assistantMode is the MOST IMPORTANT anti-detection config!
+      assistantMode: true,
+      
+      // CDP port
+      cdpPort,
+      
+      // Timeout
+      timeout: 60000,
+      
+      // 🔥 Key 5: Minimal args (avoid detection by excessive flags)
+      args: [
+        '--no-first-run',
+        '--disable-default-apps',
+        '--no-default-browser-check',
+        '--start-maximized',
+      ],
+      
+      // Signal handling
+      handleSIGINT: false,
+      handleSIGTERM: false,
+    };
     
-    // Create context with fingerprint
-    const context = await browser.newContext(contextOptions);
+    // Context options (from fingerprint)
+    const contextOptions = {
+      ...fingerprintOptions,
+      
+      // 🔥 Key: Use real viewport
+      viewport: null,
+      
+      // Locale and timezone
+      locale: fingerprint.navigator?.language || 'zh-CN',
+      timezoneId: 'Asia/Shanghai',
+      
+      // Enable JavaScript
+      javaScriptEnabled: true,
+      
+      // Ignore HTTPS errors
+      ignoreHTTPSErrors: true,
+    };
     
-    // Load existing cookies
-    const cookies = await loadCookies(accountId);
-    if (cookies.length > 0) {
-      await context.addCookies(cookies);
-      console.log(`[BrowserManager] Loaded ${cookies.length} cookies for account ${accountId}`);
+    // Configure proxy if provided
+    if (proxy) {
+      contextOptions.proxy = {
+        server: `${proxy.protocol || 'http'}://${proxy.host}:${proxy.port}`,
+      };
+      if (proxy.username && proxy.password) {
+        contextOptions.proxy.username = proxy.username;
+        contextOptions.proxy.password = proxy.password;
+      }
     }
     
-    // Inject stealth scripts on every page
-    await context.addInitScript(generateStealthScripts(fingerprint));
+    // Merge options
+    const finalOptions = {
+      ...launchOptions,
+      ...contextOptions,
+    };
     
-    // Create page
-    const page = await context.newPage();
+    console.log('[BrowserManager] 🔧 Launch config:', {
+      channel: finalOptions.channel,
+      assistantMode: finalOptions.assistantMode,
+      chromiumSandbox: finalOptions.chromiumSandbox,
+      userDataDir,
+    });
+    
+    // 🔥 Use launchPersistentContext for persistent sessions
+    const browserContext = await chromium.launchPersistentContext(userDataDir, finalOptions);
+    
+    // Get or create page
+    let page = browserContext.pages()[0];
+    if (!page) {
+      page = await browserContext.newPage();
+    }
+    
+    // Inject stealth scripts
+    await browserContext.addInitScript(generateStealthScripts(fingerprint));
     
     // Store browser instance
     activeBrowsers.set(accountId, {
-      browser,
-      context,
+      browserContext,
       page,
       fingerprint,
       proxy,
+      userDataDir,
       launchedAt: Date.now(),
     });
     
-    console.log(`[BrowserManager] Browser launched successfully for account ${accountId}`);
+    console.log(`[BrowserManager] ✅ Browser launched successfully for account ${accountId}`);
     
     return {
       success: true,
@@ -169,7 +333,17 @@ export async function launchBrowser(options) {
       message: 'Browser launched successfully',
     };
   } catch (error) {
-    console.error(`[BrowserManager] Failed to launch browser for account ${accountId}:`, error);
+    console.error(`[BrowserManager] ❌ Failed to launch browser for account ${accountId}:`, error);
+    
+    // Check for Chrome not installed error
+    if (error.message?.includes("Executable doesn't exist")) {
+      return {
+        success: false,
+        accountId,
+        error: 'Chrome not installed. Please install Google Chrome.',
+      };
+    }
+    
     return {
       success: false,
       accountId,
@@ -180,6 +354,7 @@ export async function launchBrowser(options) {
 
 /**
  * Navigate to a URL in the browser
+ * 🔥 Enhanced with Cloudflare detection and human behavior
  */
 export async function navigateTo(accountId, url) {
   const session = activeBrowsers.get(accountId);
@@ -188,7 +363,24 @@ export async function navigateTo(accountId, url) {
   }
   
   try {
-    await session.page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    // Set timeouts like playwright-mcp
+    session.page.setDefaultNavigationTimeout(60000);
+    session.page.setDefaultTimeout(5000);
+    
+    // Navigate with networkidle
+    await session.page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+    
+    // Extra wait for React apps to render
+    await humanDelay(1000, 2000);
+    
+    // 🔥 Check for Cloudflare challenge
+    if (await isCloudflareChallenge(session.page)) {
+      await handleCloudflareChallenge(session.page);
+    }
+    
+    // 🔥 Simulate human behavior after navigation
+    await simulateHumanBehavior(session.page);
+    
     return { success: true, url };
   } catch (error) {
     return { success: false, error: error.message };
@@ -205,9 +397,12 @@ export async function getPageInfo(accountId) {
   }
   
   try {
-    const url = session.page.url();
-    const title = await session.page.title();
-    return { success: true, url, title };
+    // 🔥 Use internal API to avoid tracing
+    return await callOnPageNoTrace(session.page, async (page) => {
+      const url = page.url();
+      const title = await page.title();
+      return { success: true, url, title };
+    });
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -223,8 +418,8 @@ export async function saveSession(accountId) {
   }
   
   try {
-    // Save cookies
-    const cookies = await session.context.cookies();
+    // Save cookies from browserContext
+    const cookies = await session.browserContext.cookies();
     await saveCookies(accountId, cookies);
     
     console.log(`[BrowserManager] Session saved for account ${accountId}`);
@@ -248,10 +443,11 @@ export async function closeBrowser(accountId, saveSessionBeforeClose = true) {
       await saveSession(accountId);
     }
     
-    await session.browser.close();
+    // Close browserContext (this closes the browser too)
+    await session.browserContext.close();
     activeBrowsers.delete(accountId);
     
-    console.log(`[BrowserManager] Browser closed for account ${accountId}`);
+    console.log(`[BrowserManager] ✅ Browser closed for account ${accountId}`);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -268,6 +464,7 @@ export function getActiveSessions() {
       accountId,
       launchedAt: session.launchedAt,
       hasProxy: !!session.proxy,
+      userDataDir: session.userDataDir,
     });
   }
   return sessions;
@@ -296,7 +493,10 @@ export async function takeScreenshot(accountId) {
   
   try {
     const screenshotPath = path.join(getProfilePath(accountId), `screenshot-${Date.now()}.png`);
-    await session.page.screenshot({ path: screenshotPath, fullPage: false });
+    // 🔥 Use internal API for screenshot
+    await callOnPageNoTrace(session.page, async (page) => {
+      await page.screenshot({ path: screenshotPath, fullPage: false });
+    });
     return { success: true, path: screenshotPath };
   } catch (error) {
     return { success: false, error: error.message };
@@ -305,6 +505,7 @@ export async function takeScreenshot(accountId) {
 
 /**
  * Execute JavaScript in the page
+ * 🔥 Use internal API to avoid tracing
  */
 export async function executeScript(accountId, script) {
   const session = activeBrowsers.get(accountId);
@@ -313,9 +514,255 @@ export async function executeScript(accountId, script) {
   }
   
   try {
-    const result = await session.page.evaluate(script);
+    // 🔥 Use internal API to avoid detection
+    const result = await callOnPageNoTrace(session.page, async (page) => {
+      return await page.evaluate(script);
+    });
     return { success: true, result };
   } catch (error) {
     return { success: false, error: error.message };
   }
 }
+
+// Import adapters
+import { 
+  getAdapter, 
+  getAllPlatforms, 
+  getContentPlatforms,
+  getAIPlatforms,
+  checkLoginStatus as checkPlatformLogin,
+  publishContent as adapterPublish,
+  sendAIPrompt as adapterAIChat,
+  PlatformType,
+  ContentType,
+} from './adapters/index.js';
+
+/**
+ * Check login status for an account
+ * Uses platform-specific adapter to detect login
+ */
+export async function checkLoginStatus(accountId) {
+  const session = activeBrowsers.get(accountId);
+  if (!session) {
+    return { success: false, error: 'No active browser for this account' };
+  }
+  
+  try {
+    // Get platform adapter using platformId from session
+    // If not available (old session?), fallback to accountId (for backward compatibility if needed)
+    const platformId = session.platformId || accountId;
+    const adapter = getAdapter(platformId);
+    
+    if (!adapter) {
+      // Fallback: just check if there are cookies
+      const cookies = await session.browserContext.cookies();
+      return { 
+        success: true, 
+        isLoggedIn: cookies.length > 5,
+        cookieCount: cookies.length,
+        platformId,
+      };
+    }
+    
+    // Use adapter to check login status
+    const status = await adapter.checkLoginStatus(session.page);
+    return { success: true, ...status, platformId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get platform info
+ */
+export function getPlatformInfo(platformId) {
+  const adapter = getAdapter(platformId);
+  if (!adapter) {
+    return null;
+  }
+  return {
+    id: adapter.id,
+    name: adapter.name,
+    loginUrl: adapter.loginUrl,
+    homeUrl: adapter.homeUrl,
+    color: adapter.color,
+    authCookies: adapter.getAuthCookieNames(),
+  };
+}
+
+/**
+ * Get all supported platforms
+ */
+export function listPlatforms() {
+  return getAllPlatforms();
+}
+
+/**
+ * Check if platform has saved profile
+ */
+export async function hasProfile(platformId) {
+  const profilePath = getProfilePath(platformId);
+  const exists = await fs.pathExists(profilePath);
+  
+  if (!exists) {
+    return { hasProfile: false };
+  }
+  
+  // Check for fingerprint (indicates initialized)
+  const fingerprintPath = path.join(profilePath, 'fingerprint.json');
+  const hasFingerprint = await fs.pathExists(fingerprintPath);
+  
+  // Check for Default folder (Chrome user data)
+  const defaultPath = path.join(profilePath, 'Default');
+  const hasUserData = await fs.pathExists(defaultPath);
+  
+  // Get profile stats
+  let lastModified = null;
+  try {
+    const stat = await fs.stat(profilePath);
+    lastModified = stat.mtime.getTime();
+  } catch {}
+  
+  return {
+    hasProfile: hasFingerprint || hasUserData,
+    hasFingerprint,
+    hasUserData,
+    lastModified,
+  };
+}
+
+/**
+ * Delete platform profile
+ */
+export async function deleteProfile(platformId) {
+  const profilePath = getProfilePath(platformId);
+  try {
+    await fs.remove(profilePath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============ Content Publishing ============
+
+/**
+ * Publish content to a platform
+ * @param {string} accountId - Platform ID
+ * @param {Object} content - Content to publish
+ */
+export async function publishContent(accountId, content) {
+  const session = activeBrowsers.get(accountId);
+  if (!session) {
+    return { success: false, error: 'No active browser for this account' };
+  }
+  
+  try {
+    const platformId = session.platformId || accountId;
+    const adapter = getAdapter(platformId);
+    if (!adapter) {
+      return { success: false, error: 'Unknown platform' };
+    }
+    
+    if (adapter.type !== PlatformType.CONTENT) {
+      return { success: false, error: 'Not a content platform' };
+    }
+    
+    console.log(`[BrowserManager] Publishing to ${adapter.name}...`);
+    const result = await adapter.publish(session.page, content);
+    return result;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Navigate to publish page
+ */
+export async function goToPublish(accountId, contentType = 'article') {
+  const session = activeBrowsers.get(accountId);
+  if (!session) {
+    return { success: false, error: 'No active browser for this account' };
+  }
+  
+  try {
+    const platformId = session.platformId || accountId;
+    const adapter = getAdapter(platformId);
+    if (!adapter) {
+      return { success: false, error: 'Unknown platform' };
+    }
+    
+    await adapter.goToPublish(session.page, contentType);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============ AI Chat ============
+
+/**
+ * Send prompt to AI platform
+ * @param {string} accountId - AI Platform ID
+ * @param {string} prompt - The prompt to send
+ */
+export async function sendAIPrompt(accountId, prompt) {
+  const session = activeBrowsers.get(accountId);
+  if (!session) {
+    return { success: false, error: 'No active browser for this account' };
+  }
+  
+  try {
+    const platformId = session.platformId || accountId;
+    const adapter = getAdapter(platformId);
+    if (!adapter) {
+      return { success: false, error: 'Unknown platform' };
+    }
+    
+    if (adapter.type !== PlatformType.AI_CHAT) {
+      return { success: false, error: 'Not an AI platform' };
+    }
+    
+    console.log(`[BrowserManager] Sending prompt to ${adapter.name}...`);
+    const result = await adapter.chat(session.page, prompt);
+    return result;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Start new AI conversation
+ */
+export async function newAIConversation(accountId) {
+  const session = activeBrowsers.get(accountId);
+  if (!session) {
+    return { success: false, error: 'No active browser for this account' };
+  }
+  
+  try {
+    const platformId = session.platformId || accountId;
+    const adapter = getAdapter(platformId);
+    if (!adapter || adapter.type !== PlatformType.AI_CHAT) {
+      return { success: false, error: 'Not an AI platform' };
+    }
+    
+    await adapter.newConversation(session.page);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Export utility functions for external use
+export { 
+  humanDelay, 
+  simulateHumanBehavior, 
+  isCloudflareChallenge, 
+  handleCloudflareChallenge, 
+  getAllPlatforms,
+  getContentPlatforms,
+  getAIPlatforms,
+  PlatformType,
+  ContentType,
+};

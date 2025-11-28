@@ -4,12 +4,12 @@ import {
   Bot, 
   SearchCheck, 
   Settings, 
-  LayoutDashboard,
   LogOut,
   Menu,
-  Bell
+  Bell,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { Logo } from "./Logo";
 
 interface SidebarItemProps {
   icon: React.ElementType;
@@ -47,10 +47,8 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
       {/* Sidebar */}
       <aside className="flex w-64 flex-col bg-slate-900 text-white shadow-xl">
         {/* Logo Area */}
-        <div className="flex h-16 items-center gap-2 px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-            <LayoutDashboard className="h-5 w-5 text-white" />
-          </div>
+        <div className="flex h-16 items-center gap-3 px-6">
+          <Logo className="h-8 w-8 rounded-lg shadow-sm" />
           <span className="text-lg font-bold tracking-tight">PubCast</span>
         </div>
 

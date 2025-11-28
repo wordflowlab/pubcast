@@ -131,6 +131,236 @@ app.post('/browser/close-all', async (req, res) => {
   }
 });
 
+// ============ Platform Adapter APIs ============
+
+// Get all supported platforms
+app.get('/platforms', (req, res) => {
+  try {
+    const platforms = browserManager.listPlatforms();
+    res.json({ success: true, platforms });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get content platforms only (MUST be before :platformId route)
+app.get('/platforms/content', (req, res) => {
+  try {
+    const platforms = browserManager.getContentPlatforms();
+    res.json({ success: true, platforms });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get AI platforms only (MUST be before :platformId route)
+app.get('/platforms/ai', (req, res) => {
+  try {
+    const platforms = browserManager.getAIPlatforms();
+    res.json({ success: true, platforms });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get platform info (parameterized route - must be AFTER specific routes)
+app.get('/platforms/:platformId', (req, res) => {
+  try {
+    const { platformId } = req.params;
+    const info = browserManager.getPlatformInfo(platformId);
+    if (!info) {
+      return res.status(404).json({ success: false, error: 'Platform not found' });
+    }
+    res.json({ success: true, platform: info });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Check if platform has saved profile
+app.get('/platforms/:platformId/profile', async (req, res) => {
+  try {
+    const { platformId } = req.params;
+    const result = await browserManager.hasProfile(platformId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete platform profile
+app.delete('/platforms/:platformId/profile', async (req, res) => {
+  try {
+    const { platformId } = req.params;
+    const result = await browserManager.deleteProfile(platformId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Check login status for an account
+app.get('/browser/:accountId/login-status', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const result = await browserManager.checkLoginStatus(accountId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all platform profiles status
+app.get('/profiles', async (req, res) => {
+  try {
+    const platforms = browserManager.listPlatforms();
+    const profiles = await Promise.all(
+      platforms.map(async (p) => {
+        const profileStatus = await browserManager.hasProfile(p.id);
+        return {
+          ...p,
+          ...profileStatus,
+        };
+      })
+    );
+    res.json({ success: true, profiles });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ Auth Backup APIs (for cross-device migration) ============
+
+// Get cookies for a platform
+app.get('/platforms/:platformId/cookies', async (req, res) => {
+  try {
+    const { platformId } = req.params;
+    const profilePath = `profiles/${platformId}/cookies.json`;
+    const fs = await import('fs-extra');
+    
+    if (await fs.pathExists(profilePath)) {
+      const cookies = await fs.readJson(profilePath);
+      res.json({ success: true, cookies });
+    } else {
+      res.json({ success: true, cookies: [] });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get fingerprint for a platform
+app.get('/platforms/:platformId/fingerprint', async (req, res) => {
+  try {
+    const { platformId } = req.params;
+    const profilePath = `profiles/${platformId}/fingerprint.json`;
+    const fs = await import('fs-extra');
+    
+    if (await fs.pathExists(profilePath)) {
+      const fingerprint = await fs.readJson(profilePath);
+      res.json({ success: true, fingerprint });
+    } else {
+      res.json({ success: true, fingerprint: {} });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Restore cookies and fingerprint for a platform (from database backup)
+app.post('/platforms/:platformId/restore', async (req, res) => {
+  try {
+    const { platformId } = req.params;
+    const { cookies, fingerprint } = req.body;
+    const fs = await import('fs-extra');
+    const path = await import('path');
+    
+    const profileDir = `profiles/${platformId}`;
+    await fs.ensureDir(profileDir);
+    
+    // Restore cookies
+    if (cookies && Array.isArray(cookies)) {
+      await fs.writeJson(path.join(profileDir, 'cookies.json'), cookies, { spaces: 2 });
+    }
+    
+    // Restore fingerprint
+    if (fingerprint && Object.keys(fingerprint).length > 0) {
+      await fs.writeJson(path.join(profileDir, 'fingerprint.json'), fingerprint, { spaces: 2 });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ Content Publishing APIs ============
+
+// Navigate to publish page
+app.post('/browser/:accountId/publish-page', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { contentType = 'article' } = req.body;
+    const result = await browserManager.goToPublish(accountId, contentType);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Publish content
+app.post('/browser/:accountId/publish', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { title, body, cover, tags, options } = req.body;
+    
+    if (!title || !body) {
+      return res.status(400).json({ success: false, error: 'title and body are required' });
+    }
+    
+    const result = await browserManager.publishContent(accountId, {
+      title,
+      body,
+      cover,
+      tags,
+      options,
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ AI Chat APIs ============
+
+// Send AI prompt
+app.post('/browser/:accountId/ai-chat', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { prompt } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ success: false, error: 'prompt is required' });
+    }
+    
+    const result = await browserManager.sendAIPrompt(accountId, prompt);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Start new AI conversation
+app.post('/browser/:accountId/ai-new', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const result = await browserManager.newAIConversation(accountId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n[Sidecar] Shutting down...');
@@ -147,15 +377,27 @@ process.on('SIGTERM', async () => {
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 PubCast Playwright Sidecar running at http://localhost:${PORT}`);
-  console.log('📝 API endpoints:');
-  console.log('   GET  /health');
-  console.log('   GET  /sessions');
+  console.log('');
+  console.log('📝 Browser APIs:');
   console.log('   POST /browser/launch');
   console.log('   POST /browser/navigate');
-  console.log('   GET  /browser/:accountId/info');
-  console.log('   POST /browser/:accountId/save');
-  console.log('   POST /browser/:accountId/close');
-  console.log('   POST /browser/:accountId/screenshot');
-  console.log('   POST /browser/:accountId/execute');
+  console.log('   GET  /browser/:id/info');
+  console.log('   GET  /browser/:id/login-status');
+  console.log('   POST /browser/:id/save');
+  console.log('   POST /browser/:id/close');
   console.log('   POST /browser/close-all');
+  console.log('');
+  console.log('📝 Platform APIs:');
+  console.log('   GET  /platforms          (all)');
+  console.log('   GET  /platforms/content  (content only)');
+  console.log('   GET  /platforms/ai       (AI only)');
+  console.log('   GET  /profiles           (with auth status)');
+  console.log('');
+  console.log('📤 Content Publishing APIs:');
+  console.log('   POST /browser/:id/publish-page');
+  console.log('   POST /browser/:id/publish');
+  console.log('');
+  console.log('🤖 AI Chat APIs:');
+  console.log('   POST /browser/:id/ai-chat');
+  console.log('   POST /browser/:id/ai-new');
 });

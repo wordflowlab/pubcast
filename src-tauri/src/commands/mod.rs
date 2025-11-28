@@ -4,6 +4,7 @@
 
 pub mod account;
 pub mod ai;
+pub mod auth;
 pub mod browser;
 pub mod content;
 pub mod proxy;
@@ -12,6 +13,7 @@ pub mod stats;
 
 pub use account::*;
 pub use ai::*;
+pub use auth::*;
 pub use browser::*;
 pub use content::*;
 pub use proxy::*;

@@ -1,17 +1,16 @@
 {
   "name": "pubcast-playwright-sidecar",
-  "version": "1.0.0",
-  "description": "Playwright automation service with anti-detection for PubCast",
+  "version": "1.1.0",
+  "description": "Playwright automation service with advanced anti-detection for PubCast",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "install-browser": "npx playwright install chrome"
   },
   "dependencies": {
     "playwright": "^1.49.0",
-    "playwright-extra": "^4.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "express": "^4.21.0",
     "uuid": "^10.0.0",
     "fs-extra": "^11.2.0"
