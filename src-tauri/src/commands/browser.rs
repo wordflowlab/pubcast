@@ -98,3 +98,47 @@ pub async fn browser_close_all(
     let service = state.browser_service.read().await;
     service.close_all().await.map_err(|e| e.to_string())
 }
+
+/// Get login state from sidecar (cached from login watcher)
+#[tauri::command]
+pub async fn browser_get_login_state(account_id: String) -> Result<LoginStateResponse, String> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/browser/{}/login-state", SIDECAR_URL, account_id);
+    
+    match client.get(&url).send().await {
+        Ok(resp) => {
+            if resp.status().is_success() {
+                resp.json().await.map_err(|e| e.to_string())
+            } else {
+                Ok(LoginStateResponse {
+                    success: false,
+                    account_id: Some(account_id),
+                    is_logged_in: false,
+                    login_detected_at: None,
+                    error: Some("Failed to get login state".to_string()),
+                })
+            }
+        }
+        Err(e) => Ok(LoginStateResponse {
+            success: false,
+            account_id: Some(account_id),
+            is_logged_in: false,
+            login_detected_at: None,
+            error: Some(e.to_string()),
+        }),
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginStateResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account_id: Option<String>,
+    #[serde(default)]
+    pub is_logged_in: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub login_detected_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}

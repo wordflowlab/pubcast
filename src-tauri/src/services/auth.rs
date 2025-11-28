@@ -50,10 +50,10 @@ impl AuthService {
         Ok(())
     }
 
-    /// Backup cookies and fingerprint for a platform
+    /// Backup cookies and fingerprint for an account
     pub async fn backup_auth(
         &self,
-        platform: &str,
+        account_id: &str,
         cookies: &serde_json::Value,
         fingerprint: &serde_json::Value,
     ) -> Result<()> {
@@ -72,7 +72,7 @@ impl AuthService {
                SET cookies_backup = ?, cookies_nonce = ?,
                    fingerprint_backup = ?, fingerprint_nonce = ?,
                    auth_status = 'authorized', last_auth_sync_at = ?, updated_at = ?
-               WHERE platform = ?"#
+               WHERE id = ?"#
         )
         .bind(&cookies_encrypted)
         .bind(&cookies_nonce)
@@ -80,7 +80,7 @@ impl AuthService {
         .bind(&fingerprint_nonce)
         .bind(now)
         .bind(now)
-        .bind(platform)
+        .bind(account_id)
         .execute(&self.pool)
         .await?;
 

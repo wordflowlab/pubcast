@@ -25,7 +25,8 @@ impl AccountService {
             r#"
             SELECT id, platform, name, username, status,
                    last_login_at, last_check_at, error_message,
-                   metadata, created_at, updated_at
+                   metadata, created_at, updated_at,
+                   auth_status, profile_id, last_auth_sync_at
             FROM accounts
             ORDER BY created_at DESC
             "#
@@ -47,9 +48,9 @@ impl AccountService {
                 metadata: row.metadata.as_ref().and_then(|m| serde_json::from_str(m).ok()),
                 created_at: row.created_at,
                 updated_at: row.updated_at,
-                auth_status: AuthStatus::default(),
-                profile_id: None,
-                last_auth_sync_at: None,
+                auth_status: row.auth_status.parse().unwrap_or_default(),
+                profile_id: row.profile_id,
+                last_auth_sync_at: row.last_auth_sync_at,
             })
             .collect();
 
@@ -62,7 +63,8 @@ impl AccountService {
             r#"
             SELECT id, platform, name, username, status,
                    last_login_at, last_check_at, error_message,
-                   metadata, created_at, updated_at
+                   metadata, created_at, updated_at,
+                   auth_status, profile_id, last_auth_sync_at
             FROM accounts
             WHERE platform = ?
             ORDER BY created_at DESC
@@ -86,9 +88,9 @@ impl AccountService {
                 metadata: row.metadata.as_ref().and_then(|m| serde_json::from_str(m).ok()),
                 created_at: row.created_at,
                 updated_at: row.updated_at,
-                auth_status: AuthStatus::default(),
-                profile_id: None,
-                last_auth_sync_at: None,
+                auth_status: row.auth_status.parse().unwrap_or_default(),
+                profile_id: row.profile_id,
+                last_auth_sync_at: row.last_auth_sync_at,
             })
             .collect();
 
@@ -101,7 +103,8 @@ impl AccountService {
             r#"
             SELECT id, platform, name, username, status,
                    last_login_at, last_check_at, error_message,
-                   metadata, created_at, updated_at
+                   metadata, created_at, updated_at,
+                   auth_status, profile_id, last_auth_sync_at
             FROM accounts WHERE id = ?
             "#,
             id
@@ -122,9 +125,9 @@ impl AccountService {
             metadata: row.metadata.as_ref().and_then(|m| serde_json::from_str(m).ok()),
             created_at: row.created_at,
             updated_at: row.updated_at,
-            auth_status: AuthStatus::default(),
-            profile_id: None,
-            last_auth_sync_at: None,
+            auth_status: row.auth_status.parse().unwrap_or_default(),
+            profile_id: row.profile_id,
+            last_auth_sync_at: row.last_auth_sync_at,
         })
     }
 

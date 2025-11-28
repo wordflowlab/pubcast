@@ -239,8 +239,9 @@ export function Settings() {
 
           {/* Error message */}
           {updateState.error && (
-            <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-600">
-              {updateState.error}
+            <div className="mb-4 rounded-md bg-amber-50 p-3 text-sm text-amber-700">
+              <p className="font-medium">无法检查更新</p>
+              <p className="text-xs mt-1 opacity-75">请检查网络连接，或稍后重试</p>
             </div>
           )}
 

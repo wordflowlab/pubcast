@@ -1,14 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { 
   listAccounts, 
   addAccount, 
   deleteAccount,
+  updateAccount,
   launchBrowser, 
   browserNavigate, 
   browserHealthCheck, 
   syncAuthFromBrowser,
   browserClose,
   browserGetSessions,
+  browserGetLoginState,
+  restartSidecar,
   type Account,
   type BrowserSession
 } from "@/lib/tauri";
@@ -55,6 +58,8 @@ export function AIAuth() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [sidecarOnline, setSidecarOnline] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   // Load accounts and sessions with retry
   const loadData = useCallback(async (retryCount = 0) => {
@@ -122,6 +127,65 @@ export function AIAuth() {
     }
   };
 
+  // Login watcher ref
+  const loginWatcherRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Start watching login status
+  const startLoginWatcher = useCallback((accountId: string) => {
+    // Clear existing watcher
+    if (loginWatcherRef.current) {
+      clearInterval(loginWatcherRef.current);
+    }
+    
+    console.log(`[AIAuth] 👀 Starting login watcher for ${accountId}`);
+    
+    loginWatcherRef.current = setInterval(async () => {
+      try {
+        const state = await browserGetLoginState(accountId);
+        console.log(`[AIAuth] Login state:`, state);
+        
+        if (state.success && state.isLoggedIn) {
+          console.log(`[AIAuth] ✅ Login detected for ${accountId}!`);
+          
+          // Stop watcher
+          if (loginWatcherRef.current) {
+            clearInterval(loginWatcherRef.current);
+            loginWatcherRef.current = null;
+          }
+          
+          // Auto sync and close
+          try {
+            const result = await syncAuthFromBrowser(accountId);
+            if (result.success) {
+              console.log(`[AIAuth] 💾 Auth synced for ${accountId}`);
+              await browserClose(accountId);
+              await loadData(); // Reload to show updated status
+            }
+          } catch (e) {
+            console.error('[AIAuth] Sync error:', e);
+          }
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    }, 2000); // Check every 2 seconds
+  }, [loadData]);
+
+  // Stop login watcher
+  const stopLoginWatcher = useCallback(() => {
+    if (loginWatcherRef.current) {
+      clearInterval(loginWatcherRef.current);
+      loginWatcherRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopLoginWatcher();
+    };
+  }, [stopLoginWatcher]);
+
   // Launch browser
   const handleLaunch = async (account: Account, platform: Platform, isAuth = false) => {
     if (!sidecarOnline) {
@@ -142,6 +206,11 @@ export function AIAuth() {
       const sessions = await browserGetSessions();
       setActiveSessions(sessions);
       
+      // Start watching for login (sidecar also watches, but we poll for UI update)
+      if (isAuth) {
+        startLoginWatcher(account.id);
+      }
+      
     } catch (e) {
       alert(`启动失败: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -149,10 +218,12 @@ export function AIAuth() {
     }
   };
 
-  // Confirm auth
+  // Confirm auth (manual, still available as backup)
   const handleConfirmAuth = async (account: Account) => {
     try {
       setActionLoading(account.id);
+      stopLoginWatcher(); // Stop auto-watcher
+      
       const result = await syncAuthFromBrowser(account.id);
       if (!result.success) throw new Error(result.error);
 
@@ -168,15 +239,21 @@ export function AIAuth() {
 
   // Delete account
   const handleDelete = async (account: Account) => {
-    if (!confirm(`确定要删除账号 "${account.name}" 吗？`)) return;
+    const confirmed = window.confirm(`确定要删除账号 "${account.name}" 吗？`);
+    if (!confirmed) return;
+    
     try {
+      setActionLoading(account.id);
       if (activeSessions.some(s => s.accountId === account.id)) {
         await browserClose(account.id);
       }
       await deleteAccount(account.id);
       setAccounts(prev => prev.filter(a => a.id !== account.id));
     } catch (e) {
+      console.error('Delete failed:', e);
       alert(`删除失败: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -188,9 +265,19 @@ export function AIAuth() {
           <AlertCircle className="h-5 w-5 shrink-0" />
           <div className="flex-1">
             <p className="font-medium">Playwright 服务未启动</p>
-            <p className="text-sm">请在 playwright-sidecar 目录运行 <code className="bg-amber-100 px-1 rounded">npm start</code></p>
+            <p className="text-sm">正在尝试启动服务...</p>
           </div>
-          <button onClick={() => loadData()} className="flex items-center gap-1 text-sm font-medium hover:underline">
+          <button 
+            onClick={async () => {
+              try {
+                await restartSidecar();
+                await loadData();
+              } catch (e) {
+                setError(`启动失败: ${e instanceof Error ? e.message : String(e)}`);
+              }
+            }} 
+            className="flex items-center gap-1 text-sm font-medium hover:underline"
+          >
             <RefreshCw className="h-4 w-4" /> 重试
           </button>
         </div>
@@ -280,7 +367,44 @@ export function AIAuth() {
                               {account.name.substring(0, 1)}
                             </div>
                             <div className="flex flex-col">
-                              <span className="font-medium text-slate-900">{account.name}</span>
+                              {editingId === account.id ? (
+                                <input
+                                  type="text"
+                                  value={editName}
+                                  onChange={(e) => setEditName(e.target.value)}
+                                  onBlur={async () => {
+                                    if (editName.trim() && editName !== account.name) {
+                                      await updateAccount(account.id, editName.trim());
+                                      await loadData();
+                                    }
+                                    setEditingId(null);
+                                  }}
+                                  onKeyDown={async (e) => {
+                                    if (e.key === 'Enter') {
+                                      if (editName.trim() && editName !== account.name) {
+                                        await updateAccount(account.id, editName.trim());
+                                        await loadData();
+                                      }
+                                      setEditingId(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingId(null);
+                                    }
+                                  }}
+                                  className="font-medium text-slate-900 px-1 py-0.5 border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  autoFocus
+                                />
+                              ) : (
+                                <span 
+                                  className="font-medium text-slate-900 cursor-pointer hover:text-blue-600"
+                                  onClick={() => {
+                                    setEditingId(account.id);
+                                    setEditName(account.name);
+                                  }}
+                                  title="点击编辑名称"
+                                >
+                                  {account.name}
+                                </span>
+                              )}
                               {account.username && (
                                 <span className="text-xs text-slate-500">@{account.username}</span>
                               )}
@@ -332,15 +456,13 @@ export function AIAuth() {
                                 )}
                               </>
                             ) : (
-                              <>
-                                <button onClick={() => platform && handleLaunch(account, platform, !isAuthorized)} disabled={isLoading || !sidecarOnline} className="text-blue-600 hover:text-blue-700 font-medium text-xs px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 disabled:opacity-50">
-                                  {isLoading ? "启动中..." : (isAuthorized ? "打开" : "去授权")}
-                                </button>
-                                <button onClick={() => handleDelete(account)} disabled={isLoading} className="text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50">
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </>
+                              <button onClick={() => platform && handleLaunch(account, platform, !isAuthorized)} disabled={isLoading || !sidecarOnline} className="text-blue-600 hover:text-blue-700 font-medium text-xs px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 disabled:opacity-50">
+                                {isLoading ? "启动中..." : (isAuthorized ? "打开" : "去授权")}
+                              </button>
                             )}
+                            <button onClick={() => handleDelete(account)} disabled={isLoading} className="text-red-600 hover:text-red-700 p-1 rounded hover:bg-red-50 disabled:opacity-50">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>

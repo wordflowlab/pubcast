@@ -207,6 +207,26 @@ fn stop_sidecar() {
     }
 }
 
+/// Restart the sidecar process (Tauri command)
+#[tauri::command]
+fn restart_sidecar(app_handle: tauri::AppHandle) -> Result<(), String> {
+    tracing::info!("Restarting sidecar...");
+    stop_sidecar();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    start_sidecar(&app_handle);
+    
+    // Check if sidecar is healthy
+    for _ in 0..10 {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if let Ok(resp) = reqwest::blocking::get("http://localhost:8857/health") {
+            if resp.status().is_success() {
+                return Ok(());
+            }
+        }
+    }
+    Err("Sidecar failed to start".to_string())
+}
+
 /// Configure and run the Tauri application
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -296,6 +316,7 @@ pub fn run() {
             commands::browser_close,
             commands::browser_get_sessions,
             commands::browser_close_all,
+            commands::browser_get_login_state,
             // Auth commands (for cross-device migration)
             commands::sync_auth_from_browser,
             commands::update_auth_status,
@@ -304,6 +325,8 @@ pub fn run() {
             commands::import_auth_backup,
             commands::clear_auth,
             commands::restore_auth_to_browser,
+            // Sidecar commands
+            restart_sidecar,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

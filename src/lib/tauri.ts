@@ -238,6 +238,22 @@ export async function browserCloseAll(): Promise<BrowserResponse> {
   return invoke("browser_close_all");
 }
 
+export async function restartSidecar(): Promise<void> {
+  return invoke("restart_sidecar");
+}
+
+export interface LoginStateResponse {
+  success: boolean;
+  accountId?: string;
+  isLoggedIn: boolean;
+  loginDetectedAt?: number;
+  error?: string;
+}
+
+export async function browserGetLoginState(accountId: string): Promise<LoginStateResponse> {
+  return invoke("browser_get_login_state", { accountId });
+}
+
 // ============ Auth Commands (for cross-device migration) ============
 
 export interface AuthBackup {
@@ -253,8 +269,8 @@ export interface AuthResponse {
   error?: string;
 }
 
-export async function syncAuthFromBrowser(platform: string): Promise<AuthResponse> {
-  return invoke("sync_auth_from_browser", { platform });
+export async function syncAuthFromBrowser(accountId: string): Promise<AuthResponse> {
+  return invoke("sync_auth_from_browser", { accountId });
 }
 
 export async function updateAuthStatus(platform: string, authStatus: string): Promise<AuthResponse> {

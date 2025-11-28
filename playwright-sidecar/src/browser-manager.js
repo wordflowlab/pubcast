@@ -21,6 +21,9 @@ import { generateFingerprint, applyFingerprintToContext, generateStealthScripts 
 // Store active browser instances
 const activeBrowsers = new Map();
 
+// Store login watchers
+const loginWatchers = new Map();
+
 // Base directory for browser profiles
 const PROFILES_DIR = path.join(process.cwd(), 'profiles');
 
@@ -320,6 +323,7 @@ export async function launchBrowser(options) {
       page,
       fingerprint,
       proxy,
+      platformId, // Save platformId for login detection
       userDataDir,
       launchedAt: Date.now(),
     });
@@ -355,12 +359,15 @@ export async function launchBrowser(options) {
 /**
  * Navigate to a URL in the browser
  * 🔥 Enhanced with Cloudflare detection and human behavior
+ * 🔥 Auto-starts login watcher if navigating to a login page
  */
-export async function navigateTo(accountId, url) {
+export async function navigateTo(accountId, url, options = {}) {
   const session = activeBrowsers.get(accountId);
   if (!session) {
     return { success: false, error: 'No active browser for this account' };
   }
+  
+  const { watchLogin = true } = options;
   
   try {
     // Set timeouts like playwright-mcp
@@ -380,6 +387,11 @@ export async function navigateTo(accountId, url) {
     
     // 🔥 Simulate human behavior after navigation
     await simulateHumanBehavior(session.page);
+    
+    // 🔥 Auto-start login watcher
+    if (watchLogin) {
+      startLoginWatcher(accountId);
+    }
     
     return { success: true, url };
   } catch (error) {
@@ -439,6 +451,9 @@ export async function closeBrowser(accountId, saveSessionBeforeClose = true) {
   }
   
   try {
+    // Stop login watcher
+    stopLoginWatcher(accountId);
+    
     if (saveSessionBeforeClose) {
       await saveSession(accountId);
     }
@@ -570,6 +585,99 @@ export async function checkLoginStatus(accountId) {
   } catch (error) {
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Start watching for login status changes
+ * Automatically saves session when login is detected
+ */
+export function startLoginWatcher(accountId, onLoginDetected) {
+  // Stop existing watcher if any
+  stopLoginWatcher(accountId);
+  
+  console.log(`[BrowserManager] 👀 Starting login watcher for ${accountId}`);
+  
+  let wasLoggedIn = false;
+  let checkCount = 0;
+  const maxChecks = 120; // 2 minutes max (1 check per second)
+  
+  const intervalId = setInterval(async () => {
+    checkCount++;
+    
+    // Stop after max checks
+    if (checkCount > maxChecks) {
+      console.log(`[BrowserManager] ⏱️ Login watcher timeout for ${accountId}`);
+      stopLoginWatcher(accountId);
+      return;
+    }
+    
+    const session = activeBrowsers.get(accountId);
+    if (!session) {
+      console.log(`[BrowserManager] 🛑 Browser closed, stopping watcher for ${accountId}`);
+      stopLoginWatcher(accountId);
+      return;
+    }
+    
+    try {
+      const status = await checkLoginStatus(accountId);
+      
+      if (status.success && status.isLoggedIn && !wasLoggedIn) {
+        console.log(`[BrowserManager] ✅ Login detected for ${accountId}!`);
+        wasLoggedIn = true;
+        
+        // Auto-save session
+        await saveSession(accountId);
+        console.log(`[BrowserManager] 💾 Session auto-saved for ${accountId}`);
+        
+        // Mark session as logged in
+        session.isLoggedIn = true;
+        session.loginDetectedAt = Date.now();
+        
+        // Callback
+        if (onLoginDetected) {
+          onLoginDetected(accountId, status);
+        }
+        
+        // Keep watching for logout (don't stop)
+      } else if (status.success && !status.isLoggedIn && wasLoggedIn) {
+        console.log(`[BrowserManager] ⚠️ Logout detected for ${accountId}`);
+        wasLoggedIn = false;
+        session.isLoggedIn = false;
+      }
+    } catch (e) {
+      // Ignore errors during check
+    }
+  }, 1000);
+  
+  loginWatchers.set(accountId, intervalId);
+}
+
+/**
+ * Stop login watcher for an account
+ */
+export function stopLoginWatcher(accountId) {
+  const intervalId = loginWatchers.get(accountId);
+  if (intervalId) {
+    clearInterval(intervalId);
+    loginWatchers.delete(accountId);
+    console.log(`[BrowserManager] 🛑 Stopped login watcher for ${accountId}`);
+  }
+}
+
+/**
+ * Get login status from session (cached)
+ */
+export function getLoginState(accountId) {
+  const session = activeBrowsers.get(accountId);
+  if (!session) {
+    return { success: false, error: 'No active browser' };
+  }
+  return {
+    success: true,
+    accountId,
+    isLoggedIn: session.isLoggedIn || false,
+    loginDetectedAt: session.loginDetectedAt || null,
+  };
 }
 
 /**

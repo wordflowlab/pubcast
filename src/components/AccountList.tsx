@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { 
   listAccounts, 
   addAccount, 
@@ -9,6 +9,7 @@ import {
   syncAuthFromBrowser,
   browserClose,
   browserGetSessions,
+  browserGetLoginState,
   type Account,
   type BrowserSession
 } from "@/lib/tauri";
@@ -48,6 +49,9 @@ const PLATFORMS: Platform[] = [
   { id: "jianshu", name: "简书", color: "bg-red-400", loginUrl: "https://www.jianshu.com/sign_in", homeUrl: "https://www.jianshu.com/writer" },
 ];
 
+// Media platform IDs for filtering
+const MEDIA_PLATFORM_IDS = new Set(PLATFORMS.map(p => p.id));
+
 export function AccountList() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeSessions, setActiveSessions] = useState<BrowserSession[]>([]);
@@ -79,8 +83,10 @@ export function AccountList() {
       }
 
       // Load accounts from DB (may fail if AppState not ready)
+      // Filter for media platform accounts only (exclude AI platforms)
       const data = await listAccounts();
-      setAccounts(data);
+      const mediaAccounts = data.filter(acc => MEDIA_PLATFORM_IDS.has(acc.platform));
+      setAccounts(mediaAccounts);
 
       // Load active sessions if sidecar is up
       if (isHealthy) {
@@ -133,6 +139,65 @@ export function AccountList() {
     }
   };
 
+  // Login watcher ref
+  const loginWatcherRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Start watching login status
+  const startLoginWatcher = useCallback((accountId: string) => {
+    if (loginWatcherRef.current) {
+      clearInterval(loginWatcherRef.current);
+    }
+    
+    console.log(`[AccountList] 👀 Starting login watcher for ${accountId}`);
+    
+    loginWatcherRef.current = setInterval(async () => {
+      try {
+        const state = await browserGetLoginState(accountId);
+        
+        if (state.success && state.isLoggedIn) {
+          console.log(`[AccountList] ✅ Login detected for ${accountId}!`);
+          
+          if (loginWatcherRef.current) {
+            clearInterval(loginWatcherRef.current);
+            loginWatcherRef.current = null;
+          }
+          
+          // Auto sync and close
+          try {
+            const result = await syncAuthFromBrowser(accountId);
+            if (result.success) {
+              console.log(`[AccountList] 💾 Auth synced for ${accountId}`);
+              await browserClose(accountId);
+              
+              // Refresh data
+              const updatedAccounts = await listAccounts();
+              setAccounts(updatedAccounts);
+              const sessions = await browserGetSessions();
+              setActiveSessions(sessions);
+            }
+          } catch (e) {
+            console.error('[AccountList] Sync error:', e);
+          }
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    }, 2000);
+  }, []);
+
+  // Stop login watcher
+  const stopLoginWatcher = useCallback(() => {
+    if (loginWatcherRef.current) {
+      clearInterval(loginWatcherRef.current);
+      loginWatcherRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => stopLoginWatcher();
+  }, [stopLoginWatcher]);
+
   // 2. Launch browser for existing account
   const handleLaunch = async (account: Account, platform: Platform, isAuth = false) => {
     if (!sidecarOnline) {
@@ -158,6 +223,11 @@ export function AccountList() {
       const sessions = await browserGetSessions();
       setActiveSessions(sessions);
       
+      // Start watching for login
+      if (isAuth) {
+        startLoginWatcher(account.id);
+      }
+      
     } catch (e) {
       alert(`启动失败: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -165,10 +235,11 @@ export function AccountList() {
     }
   };
 
-  // 3. Confirm auth (sync cookies)
+  // 3. Confirm auth (sync cookies) - manual backup
   const handleConfirmAuth = async (account: Account) => {
     try {
       setActionLoading(account.id);
+      stopLoginWatcher(); // Stop auto-watcher
       
       const result = await syncAuthFromBrowser(account.id);
       if (!result.success) {

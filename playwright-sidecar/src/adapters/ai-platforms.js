@@ -642,10 +642,21 @@ export class DeepSeekAdapter extends BasePlatformAdapter {
 
   async checkLoginStatus(page) {
     try {
+      const url = page.url();
+      // If on sign_in page, not logged in
+      if (url.includes('/sign_in')) {
+        return { isLoggedIn: false };
+      }
+      
       const isLoggedIn = await page.evaluate(() => {
-        const chatInput = document.querySelector('textarea');
-        const loginBtn = document.querySelector('[class*="login"]');
-        return !!chatInput && !loginBtn;
+        // Check for chat input with "发送消息" placeholder (only visible when logged in)
+        const chatInput = document.querySelector('textarea[placeholder*="发送消息"], textarea[placeholder*="message"]');
+        // Check for user avatar/name in sidebar (only visible when logged in)
+        const userInfo = document.querySelector('[class*="user"], [class*="avatar"], [class*="profile"]');
+        // Check for chat history links
+        const chatLinks = document.querySelectorAll('a[href*="/chat/"]');
+        
+        return !!chatInput || !!userInfo || chatLinks.length > 0;
       });
       return { isLoggedIn };
     } catch {

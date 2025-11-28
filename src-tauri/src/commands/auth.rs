@@ -17,32 +17,32 @@ pub struct AuthResponse {
 #[tauri::command]
 pub async fn sync_auth_from_browser(
     state: State<'_, AppState>,
-    platform: String,
+    account_id: String,
 ) -> Result<AuthResponse, String> {
     // First get cookies and fingerprint from sidecar
     let browser_service = state.browser_service.read().await;
     
     // Get session info to check if browser is running
     let sessions = browser_service.get_sessions().await.map_err(|e| e.to_string())?;
-    let has_session = sessions.iter().any(|s| s.account_id == platform);
+    let has_session = sessions.iter().any(|s| s.account_id == account_id);
     
     if !has_session {
         return Ok(AuthResponse {
             success: false,
-            error: Some("No active browser session for this platform".to_string()),
+            error: Some("No active browser session for this account".to_string()),
         });
     }
 
     // Save session to file first
-    browser_service.save_session(&platform).await.map_err(|e| e.to_string())?;
+    browser_service.save_session(&account_id).await.map_err(|e| e.to_string())?;
 
     // Now fetch the saved cookies and fingerprint from sidecar
     let client = reqwest::Client::new();
     let base_url = "http://localhost:8857";
     
-    // Get cookies
+    // Get cookies from account profile
     let cookies_resp = client
-        .get(format!("{}/platforms/{}/cookies", base_url, platform))
+        .get(format!("{}/platforms/{}/cookies", base_url, account_id))
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -53,9 +53,9 @@ pub async fn sync_auth_from_browser(
         serde_json::json!([])
     };
 
-    // Get fingerprint
+    // Get fingerprint from account profile
     let fp_resp = client
-        .get(format!("{}/platforms/{}/fingerprint", base_url, platform))
+        .get(format!("{}/platforms/{}/fingerprint", base_url, account_id))
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -66,10 +66,10 @@ pub async fn sync_auth_from_browser(
         serde_json::json!({})
     };
 
-    // Save to database
+    // Save to database using account_id
     let auth_service = state.auth_service.read().await;
     auth_service
-        .backup_auth(&platform, &cookies, &fingerprint)
+        .backup_auth(&account_id, &cookies, &fingerprint)
         .await
         .map_err(|e| e.to_string())?;
 

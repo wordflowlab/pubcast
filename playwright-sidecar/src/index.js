@@ -25,7 +25,7 @@ app.get('/sessions', (req, res) => {
 // Launch browser for an account
 app.post('/browser/launch', async (req, res) => {
   try {
-    const { accountId, proxy, headless } = req.body;
+    const { accountId, platformId, proxy, headless } = req.body;
     
     if (!accountId) {
       return res.status(400).json({ success: false, error: 'accountId is required' });
@@ -33,6 +33,7 @@ app.post('/browser/launch', async (req, res) => {
     
     const result = await browserManager.launchBrowser({
       accountId,
+      platformId, // Pass platformId for login detection
       proxy,
       headless: headless ?? false,
     });
@@ -64,6 +65,28 @@ app.get('/browser/:accountId/info', async (req, res) => {
   try {
     const { accountId } = req.params;
     const result = await browserManager.getPageInfo(accountId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Check login status (real-time check)
+app.get('/browser/:accountId/login-status', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const result = await browserManager.checkLoginStatus(accountId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get cached login state (from watcher)
+app.get('/browser/:accountId/login-state', (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const result = browserManager.getLoginState(accountId);
     res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

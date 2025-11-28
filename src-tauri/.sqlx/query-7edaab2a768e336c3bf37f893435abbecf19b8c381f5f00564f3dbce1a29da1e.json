@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT id, platform, name, username, status,\n                   last_login_at, last_check_at, error_message,\n                   metadata, created_at, updated_at\n            FROM accounts WHERE id = ?\n            ",
+  "query": "\n            SELECT id, platform, name, username, status,\n                   last_login_at, last_check_at, error_message,\n                   metadata, created_at, updated_at,\n                   auth_status, profile_id, last_auth_sync_at\n            FROM accounts WHERE id = ?\n            ",
   "describe": {
     "columns": [
       {
@@ -57,6 +57,21 @@
         "name": "updated_at",
         "ordinal": 10,
         "type_info": "Integer"
+      },
+      {
+        "name": "auth_status",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "profile_id",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_auth_sync_at",
+        "ordinal": 13,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -73,8 +88,11 @@
       true,
       true,
       false,
-      false
+      false,
+      false,
+      true,
+      true
     ]
   },
-  "hash": "d588074133a2b2b085366338cb1920b232472d64f15de8c2b88f05a28a3e82c2"
+  "hash": "7edaab2a768e336c3bf37f893435abbecf19b8c381f5f00564f3dbce1a29da1e"
 }
