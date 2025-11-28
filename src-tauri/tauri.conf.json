@@ -33,7 +33,12 @@
       "icons/128x128@2x.png",
       "icons/icon.ico",
       "icons/icon.icns"
-    ]
+    ],
+    "resources": {
+      "../playwright-sidecar/src": "playwright-sidecar/src",
+      "../playwright-sidecar/package.json": "playwright-sidecar/package.json",
+      "../playwright-sidecar/package-lock.json": "playwright-sidecar/package-lock.json"
+    }
   },
   "plugins": {
     "updater": {

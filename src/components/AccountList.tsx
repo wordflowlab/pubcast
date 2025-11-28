@@ -63,8 +63,8 @@ export function AccountList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Load accounts and sessions
-  const loadData = useCallback(async () => {
+  // Load accounts and sessions with retry
+  const loadData = useCallback(async (retryCount = 0) => {
     try {
       setLoading(true);
       
@@ -74,12 +74,11 @@ export function AccountList() {
       
       if (!isHealthy) {
         setError("Playwright 服务未启动");
-        // Still load accounts even if sidecar is down
       } else {
         setError(null);
       }
 
-      // Load accounts from DB
+      // Load accounts from DB (may fail if AppState not ready)
       const data = await listAccounts();
       setAccounts(data);
 
@@ -90,6 +89,11 @@ export function AccountList() {
       }
       
     } catch (e) {
+      // Retry a few times if backend not ready
+      if (retryCount < 3) {
+        setTimeout(() => loadData(retryCount + 1), 1000);
+        return;
+      }
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {
       setLoading(false);
@@ -246,7 +250,7 @@ export function AccountList() {
             <p className="text-sm">请在 playwright-sidecar 目录运行 <code className="bg-amber-100 px-1 rounded">npm start</code></p>
           </div>
           <button 
-            onClick={loadData}
+            onClick={() => loadData()}
             className="flex items-center gap-1 text-sm font-medium hover:underline"
           >
             <RefreshCw className="h-4 w-4" />
@@ -335,7 +339,7 @@ export function AccountList() {
           </div>
 
           <button 
-            onClick={loadData}
+            onClick={() => loadData()}
             className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
           >
             <RefreshCw className="h-4 w-4" />
@@ -434,7 +438,7 @@ export function AccountList() {
                                   </button>
                                 ) : (
                                   <button
-                                    onClick={() => browserClose(account.id).then(loadData)}
+                                    onClick={() => browserClose(account.id).then(() => loadData())}
                                     disabled={isLoading}
                                     className="text-slate-600 hover:text-slate-700 font-medium text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
                                   >

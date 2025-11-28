@@ -4,11 +4,16 @@ use tauri::State;
 use crate::AppState;
 use crate::services::browser::{BrowserResponse, PageInfoResponse, SessionInfo};
 
-/// Check if sidecar is running
+const SIDECAR_URL: &str = "http://localhost:3002";
+
+/// Check if sidecar is running (independent of AppState)
 #[tauri::command]
-pub async fn browser_health_check(state: State<'_, AppState>) -> Result<bool, String> {
-    let service = state.browser_service.read().await;
-    service.health_check().await.map_err(|e| e.to_string())
+pub async fn browser_health_check() -> Result<bool, String> {
+    let client = reqwest::Client::new();
+    match client.get(format!("{}/health", SIDECAR_URL)).send().await {
+        Ok(resp) => Ok(resp.status().is_success()),
+        Err(_) => Ok(false),
+    }
 }
 
 /// Launch browser for an account

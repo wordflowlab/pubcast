@@ -11,10 +11,14 @@ pub mod services;
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::process::{Command, Child, Stdio};
 
 use sqlx::SqlitePool;
 use tauri::Manager;
 use tokio::sync::RwLock;
+
+/// Global sidecar process handle
+static SIDECAR_PROCESS: std::sync::OnceLock<std::sync::Mutex<Option<Child>>> = std::sync::OnceLock::new();
 
 use infrastructure::database::{DatabaseConfig, init_database};
 use infrastructure::encryption::{EncryptionService, KeychainService};
@@ -94,6 +98,74 @@ impl AppState {
     }
 }
 
+/// Start the playwright sidecar process
+fn start_sidecar(app_handle: &tauri::AppHandle) {
+    // Initialize the global process holder
+    let _ = SIDECAR_PROCESS.get_or_init(|| std::sync::Mutex::new(None));
+
+    // Get the sidecar directory (relative to the app)
+    let resource_dir = app_handle.path().resource_dir().ok();
+    let sidecar_dir = if let Some(dir) = resource_dir {
+        dir.join("playwright-sidecar")
+    } else {
+        // Fallback for development: use relative path
+        std::env::current_dir()
+            .unwrap_or_default()
+            .parent()
+            .map(|p| p.join("playwright-sidecar"))
+            .unwrap_or_else(|| PathBuf::from("../playwright-sidecar"))
+    };
+
+    tracing::info!("Looking for sidecar in: {:?}", sidecar_dir);
+
+    // Check if sidecar directory exists
+    if !sidecar_dir.exists() {
+        tracing::warn!("Sidecar directory not found: {:?}", sidecar_dir);
+        tracing::info!("Please start sidecar manually: cd playwright-sidecar && npm start");
+        return;
+    }
+
+    // Try to start the sidecar
+    #[cfg(target_os = "windows")]
+    let npm_cmd = "npm.cmd";
+    #[cfg(not(target_os = "windows"))]
+    let npm_cmd = "npm";
+
+    match Command::new(npm_cmd)
+        .arg("start")
+        .current_dir(&sidecar_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => {
+            tracing::info!("Sidecar started with PID: {}", child.id());
+            if let Some(mutex) = SIDECAR_PROCESS.get() {
+                if let Ok(mut guard) = mutex.lock() {
+                    *guard = Some(child);
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to start sidecar: {}. Please start manually.", e);
+        }
+    }
+}
+
+/// Stop the sidecar process
+fn stop_sidecar() {
+    if let Some(mutex) = SIDECAR_PROCESS.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            if let Some(mut child) = guard.take() {
+                tracing::info!("Stopping sidecar process...");
+                let _ = child.kill();
+                let _ = child.wait();
+                tracing::info!("Sidecar process stopped");
+            }
+        }
+    }
+}
+
 /// Configure and run the Tauri application
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -111,6 +183,9 @@ pub fn run() {
                 .init();
 
             tracing::info!("PubCast application starting...");
+
+            // Start playwright sidecar
+            start_sidecar(app.handle());
 
             // Get app data directory
             let data_dir = app
@@ -189,6 +264,11 @@ pub fn run() {
             commands::clear_auth,
             commands::restore_auth_to_browser,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                stop_sidecar();
+            }
+        });
 }
