@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., 0.1.0)'
+        description: 'Version to release (e.g., v0.1.0)'
         required: true
-        default: '0.1.0'
+        default: 'v0.1.0'
 
 permissions:
   contents: write
@@ -70,8 +70,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v${{ github.event.inputs.version || github.ref_name }}
-          releaseName: 'PubCast v${{ github.event.inputs.version || github.ref_name }}'
+          tagName: ${{ github.event.inputs.version || github.ref_name }}
+          releaseName: 'PubCast ${{ github.event.inputs.version || github.ref_name }}'
           releaseBody: |
             ## PubCast Release
             
