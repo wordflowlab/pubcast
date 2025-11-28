@@ -1,6 +1,6 @@
 [package]
 name = "pubcast"
-version = "0.2.0"
+version = "0.2.1"
 description = "Multi-platform content publishing tool"
 authors = ["PubCast Team"]
 edition = "2021"
