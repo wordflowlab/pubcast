@@ -64,6 +64,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event.inputs.version || github.ref_name }}
           releaseName: 'PubCast ${{ github.event.inputs.version || github.ref_name }}'
@@ -77,12 +79,17 @@ jobs:
             - 代理池管理
             - 账号管理
             - AI 大模型多账户管理
+            - 自动更新支持
             
             ### Downloads
             - **macOS (Apple Silicon)**: `PubCast_*_aarch64.dmg`
             - **Windows (64-bit)**: `PubCast_*_x64-setup.exe` 或 `PubCast_*_x64_en-US.msi`
+            
+            ### Auto Update
+            应用内支持自动检查更新和下载安装
           releaseDraft: false
           prerelease: false
+          updaterJsonKeepUniversal: true
           args: --target ${{ matrix.target }}
 
   # Build sidecar separately
