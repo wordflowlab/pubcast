@@ -23,12 +23,6 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             name: macOS-arm64
-          - platform: macos-latest
-            target: x86_64-apple-darwin
-            name: macOS-x64
-          - platform: windows-latest
-            target: x86_64-pc-windows-msvc
-            name: Windows-x64
 
     runs-on: ${{ matrix.platform }}
     
@@ -84,8 +78,6 @@ jobs:
             
             ### Downloads
             - **macOS (Apple Silicon)**: `PubCast_*_aarch64.dmg`
-            - **macOS (Intel)**: `PubCast_*_x64.dmg`
-            - **Windows**: `PubCast_*_x64-setup.exe`
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
