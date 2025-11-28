@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 科技蓝渐变背景 -->
+    <linearGradient id="bg-gradient" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/> <!-- Blue 500 -->
+      <stop offset="100%" stop-color="#1D4ED8"/> <!-- Blue 700 -->
+    </linearGradient>
+    <!-- 投影效果 -->
+    <filter id="drop-shadow" x="-20" y="-20" width="560" height="560" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- 背景：圆角矩形 (Squircle) -->
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg-gradient)" />
+
+  <!-- 装饰：信号波纹 (Broadcast) -->
+  <path d="M140 360 C140 360 200 420 372 248" stroke="white" stroke-opacity="0.1" stroke-width="32" stroke-linecap="round"/>
+  <path d="M100 320 C100 320 160 380 332 208" stroke="white" stroke-opacity="0.05" stroke-width="32" stroke-linecap="round"/>
+
+  <!-- 主体：纸飞机 (Publish) -->
+  <g filter="url(#drop-shadow)">
+    <!-- 飞机机翼 -->
+    <path d="M160 280 L380 140 L240 360 L220 280 L160 280 Z" fill="white"/>
+    <!-- 飞机中线阴影 -->
+    <path d="M220 280 L380 140" stroke="#2563EB" stroke-width="4"/> 
+    <path d="M220 280 L240 360 L380 140" fill="#E0F2FE"/> <!-- 浅蓝侧翼 -->
+  </g>
+</svg>
