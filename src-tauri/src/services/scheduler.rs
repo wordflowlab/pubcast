@@ -3,11 +3,9 @@
 //! Manages publish job queue, concurrency control, and retry logic.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use sqlx::SqlitePool;
 use tokio::sync::{mpsc, Semaphore};
-use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::error::{PubCastError, Result};
@@ -26,7 +24,11 @@ const MAX_RETRY_DELAY_SECS: u64 = 300;
 /// Scheduler service for managing publish jobs
 pub struct SchedulerService {
     pool: SqlitePool,
+    /// Semaphore for concurrency control (reserved for future use)
+    #[allow(dead_code)]
     semaphore: Arc<Semaphore>,
+    /// Shutdown signal sender (reserved for future use)
+    #[allow(dead_code)]
     shutdown_tx: Option<mpsc::Sender<()>>,
 }
 
