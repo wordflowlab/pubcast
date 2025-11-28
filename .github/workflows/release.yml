@@ -98,6 +98,7 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           updaterJsonKeepUniversal: true
+          bundles: "dmg,msi,nsis"
           args: --target ${{ matrix.target }}
 
   # Build sidecar separately
