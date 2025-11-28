@@ -9,7 +9,7 @@ import * as browserManager from './browser-manager.js';
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 8857;
 
 // Health check
 app.get('/health', (req, res) => {

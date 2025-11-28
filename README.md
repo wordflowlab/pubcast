@@ -27,6 +27,33 @@
 - Playwright (Node.js sidecar)
 - Stealth 反检测
 
+## 安装说明
+
+### macOS 首次打开
+
+由于应用未经 Apple 签名，首次打开时 macOS 可能会提示「应用已损坏」。请在终端运行以下命令后重新打开：
+
+```bash
+# 移除隔离属性
+xattr -cr /Applications/pubcast.app
+```
+
+或者：右键点击应用 → 选择「打开」→ 在弹窗中点击「打开」按钮。
+
+### Playwright 服务
+
+首次使用账号授权功能前，需要确保系统已安装 Node.js，应用会自动启动 Playwright 服务。
+
+如果出现「Playwright 服务未启动」提示，请手动启动：
+
+```bash
+# 进入应用资源目录
+cd /Applications/pubcast.app/Contents/Resources/playwright-sidecar
+
+# 安装依赖并启动
+npm install && npm start
+```
+
 ## 开发环境
 
 ### 前置要求

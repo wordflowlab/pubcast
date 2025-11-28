@@ -38,7 +38,7 @@ pub async fn sync_auth_from_browser(
 
     // Now fetch the saved cookies and fingerprint from sidecar
     let client = reqwest::Client::new();
-    let base_url = "http://localhost:3002";
+    let base_url = "http://localhost:8857";
     
     // Get cookies
     let cookies_resp = client
@@ -180,7 +180,7 @@ pub async fn restore_auth_to_browser(
         Some(b) => {
             // Send to sidecar to restore
             let client = reqwest::Client::new();
-            let base_url = "http://localhost:3002";
+            let base_url = "http://localhost:8857";
             
             let resp = client
                 .post(format!("{}/platforms/{}/restore", base_url, platform))

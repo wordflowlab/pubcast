@@ -125,17 +125,45 @@ fn start_sidecar(app_handle: &tauri::AppHandle) {
         return;
     }
 
-    // Try to start the sidecar
     #[cfg(target_os = "windows")]
     let npm_cmd = "npm.cmd";
     #[cfg(not(target_os = "windows"))]
     let npm_cmd = "npm";
 
+    // Check if node_modules exists, if not run npm install first
+    let node_modules = sidecar_dir.join("node_modules");
+    if !node_modules.exists() {
+        tracing::info!("Installing sidecar dependencies...");
+        match Command::new(npm_cmd)
+            .arg("install")
+            .current_dir(&sidecar_dir)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+        {
+            Ok(output) => {
+                if output.status.success() {
+                    tracing::info!("Sidecar dependencies installed successfully");
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    tracing::warn!("Failed to install sidecar dependencies: {}", stderr);
+                    return;
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to run npm install: {}. Is Node.js installed?", e);
+                return;
+            }
+        }
+    }
+
+    // Try to start the sidecar
+    // Use Stdio::null() to prevent zombie processes from piped but unconsumed output
     match Command::new(npm_cmd)
         .arg("start")
         .current_dir(&sidecar_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
     {
         Ok(child) => {
@@ -145,6 +173,19 @@ fn start_sidecar(app_handle: &tauri::AppHandle) {
                     *guard = Some(child);
                 }
             }
+            
+            // Wait for sidecar to be ready (up to 10 seconds)
+            tracing::info!("Waiting for sidecar to be ready...");
+            for i in 0..20 {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                if let Ok(resp) = reqwest::blocking::get("http://localhost:8857/health") {
+                    if resp.status().is_success() {
+                        tracing::info!("Sidecar is ready after {}ms", (i + 1) * 500);
+                        return;
+                    }
+                }
+            }
+            tracing::warn!("Sidecar may not be ready yet, continuing anyway...");
         }
         Err(e) => {
             tracing::warn!("Failed to start sidecar: {}. Please start manually.", e);

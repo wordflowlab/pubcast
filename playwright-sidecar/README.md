@@ -24,7 +24,7 @@ npx playwright install chromium
 npm start
 ```
 
-服务默认运行在 `http://localhost:3002`
+服务默认运行在 `http://localhost:8857`
 
 ## API 接口
 
@@ -43,7 +43,7 @@ npm start
 ## 启动浏览器示例
 
 ```bash
-curl -X POST http://localhost:3002/browser/launch \
+curl -X POST http://localhost:8857/browser/launch \
   -H "Content-Type: application/json" \
   -d '{
     "accountId": "account-123",

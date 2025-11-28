@@ -82,11 +82,18 @@ jobs:
             - 自动更新支持
             
             ### Downloads
-            - **macOS (Apple Silicon)**: `PubCast_*_aarch64.dmg`
-            - **Windows (64-bit)**: `PubCast_*_x64-setup.exe` 或 `PubCast_*_x64_en-US.msi`
+            - **macOS (Apple Silicon)**: `pubcast_*_aarch64.dmg`
+            - **Windows (64-bit)**: `pubcast_*_x64-setup.exe`
             
-            ### Auto Update
-            应用内支持自动检查更新和下载安装
+            ### macOS 首次安装
+            
+            由于应用未经 Apple 签名，首次打开可能提示「应用已损坏」，请运行：
+            ```bash
+            xattr -cr /Applications/pubcast.app
+            ```
+            
+            ### 前置要求
+            - **Node.js**: 首次启动时需要 Node.js 来运行浏览器自动化服务
           releaseDraft: false
           prerelease: false
           updaterJsonKeepUniversal: true

@@ -4,7 +4,7 @@ use tauri::State;
 use crate::AppState;
 use crate::services::browser::{BrowserResponse, PageInfoResponse, SessionInfo};
 
-const SIDECAR_URL: &str = "http://localhost:3002";
+const SIDECAR_URL: &str = "http://localhost:8857";
 
 /// Check if sidecar is running (independent of AppState)
 #[tauri::command]

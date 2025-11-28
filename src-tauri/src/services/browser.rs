@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{PubCastError, Result};
 use crate::models::Proxy;
 
-const SIDECAR_URL: &str = "http://localhost:3002";
+const SIDECAR_URL: &str = "http://localhost:8857";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LaunchBrowserRequest {
