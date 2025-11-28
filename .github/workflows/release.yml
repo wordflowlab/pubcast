@@ -96,6 +96,7 @@ jobs:
             - **Node.js**: 首次启动时需要 Node.js 来运行浏览器自动化服务
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true
           updaterJsonKeepUniversal: true
           args: --target ${{ matrix.target }}
 
