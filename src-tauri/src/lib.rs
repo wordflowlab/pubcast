@@ -11,18 +11,14 @@ pub mod services;
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::process::{Command, Child, Stdio};
 
 use sqlx::SqlitePool;
 use tauri::Manager;
 use tokio::sync::RwLock;
 
-/// Global sidecar process handle
-static SIDECAR_PROCESS: std::sync::OnceLock<std::sync::Mutex<Option<Child>>> = std::sync::OnceLock::new();
-
 use infrastructure::database::{DatabaseConfig, init_database};
 use infrastructure::encryption::{EncryptionService, KeychainService};
-use services::{AccountService, AIService, AuthService, BrowserService, ContentService, ContentApiConfig, ProxyService, SchedulerService, StatsService};
+use services::{AccountService, AIService, AuthService, BrowserService, ContentService, ContentApiConfig, ProxyService, SchedulerService, StatsService, SidecarManager};
 
 /// Application state shared across commands
 pub struct AppState {
@@ -36,11 +32,12 @@ pub struct AppState {
     pub ai_service: Arc<RwLock<AIService>>,
     pub browser_service: Arc<RwLock<BrowserService>>,
     pub auth_service: Arc<RwLock<AuthService>>,
+    pub sidecar_manager: Arc<RwLock<SidecarManager>>,
 }
 
 impl AppState {
     /// Initialize application state with database and services
-    pub async fn init(data_dir: PathBuf) -> error::Result<Self> {
+    pub async fn init(app_handle: &tauri::AppHandle, data_dir: PathBuf) -> error::Result<Self> {
         // Ensure data directory exists
         std::fs::create_dir_all(&data_dir).map_err(|e| {
             error::PubCastError::Configuration(format!("Failed to create data dir: {}", e))
@@ -83,6 +80,12 @@ impl AppState {
             encryption.clone(),
         )));
 
+        // Initialize SidecarManager
+        let sidecar_manager = Arc::new(RwLock::new(
+            SidecarManager::new(app_handle)
+                .map_err(|e| error::PubCastError::Configuration(format!("Failed to create SidecarManager: {}", e)))?
+        ));
+
         Ok(Self {
             db,
             encryption,
@@ -94,137 +97,24 @@ impl AppState {
             ai_service,
             browser_service,
             auth_service,
+            sidecar_manager,
         })
-    }
-}
-
-/// Start the playwright sidecar process
-fn start_sidecar(app_handle: &tauri::AppHandle) {
-    // Initialize the global process holder
-    let _ = SIDECAR_PROCESS.get_or_init(|| std::sync::Mutex::new(None));
-
-    // Get the sidecar directory (relative to the app)
-    let resource_dir = app_handle.path().resource_dir().ok();
-    let sidecar_dir = if let Some(dir) = resource_dir {
-        dir.join("playwright-sidecar")
-    } else {
-        // Fallback for development: use relative path
-        std::env::current_dir()
-            .unwrap_or_default()
-            .parent()
-            .map(|p| p.join("playwright-sidecar"))
-            .unwrap_or_else(|| PathBuf::from("../playwright-sidecar"))
-    };
-
-    tracing::info!("Looking for sidecar in: {:?}", sidecar_dir);
-
-    // Check if sidecar directory exists
-    if !sidecar_dir.exists() {
-        tracing::warn!("Sidecar directory not found: {:?}", sidecar_dir);
-        tracing::info!("Please start sidecar manually: cd playwright-sidecar && npm start");
-        return;
-    }
-
-    #[cfg(target_os = "windows")]
-    let npm_cmd = "npm.cmd";
-    #[cfg(not(target_os = "windows"))]
-    let npm_cmd = "npm";
-
-    // Check if node_modules exists, if not run npm install first
-    let node_modules = sidecar_dir.join("node_modules");
-    if !node_modules.exists() {
-        tracing::info!("Installing sidecar dependencies...");
-        match Command::new(npm_cmd)
-            .arg("install")
-            .current_dir(&sidecar_dir)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-        {
-            Ok(output) => {
-                if output.status.success() {
-                    tracing::info!("Sidecar dependencies installed successfully");
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    tracing::warn!("Failed to install sidecar dependencies: {}", stderr);
-                    return;
-                }
-            }
-            Err(e) => {
-                tracing::warn!("Failed to run npm install: {}. Is Node.js installed?", e);
-                return;
-            }
-        }
-    }
-
-    // Try to start the sidecar
-    // Use Stdio::null() to prevent zombie processes from piped but unconsumed output
-    match Command::new(npm_cmd)
-        .arg("start")
-        .current_dir(&sidecar_dir)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(child) => {
-            tracing::info!("Sidecar started with PID: {}", child.id());
-            if let Some(mutex) = SIDECAR_PROCESS.get() {
-                if let Ok(mut guard) = mutex.lock() {
-                    *guard = Some(child);
-                }
-            }
-            
-            // Wait for sidecar to be ready (up to 10 seconds)
-            tracing::info!("Waiting for sidecar to be ready...");
-            for i in 0..20 {
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                if let Ok(resp) = reqwest::blocking::get("http://localhost:8857/health") {
-                    if resp.status().is_success() {
-                        tracing::info!("Sidecar is ready after {}ms", (i + 1) * 500);
-                        return;
-                    }
-                }
-            }
-            tracing::warn!("Sidecar may not be ready yet, continuing anyway...");
-        }
-        Err(e) => {
-            tracing::warn!("Failed to start sidecar: {}. Please start manually.", e);
-        }
-    }
-}
-
-/// Stop the sidecar process
-fn stop_sidecar() {
-    if let Some(mutex) = SIDECAR_PROCESS.get() {
-        if let Ok(mut guard) = mutex.lock() {
-            if let Some(mut child) = guard.take() {
-                tracing::info!("Stopping sidecar process...");
-                let _ = child.kill();
-                let _ = child.wait();
-                tracing::info!("Sidecar process stopped");
-            }
-        }
     }
 }
 
 /// Restart the sidecar process (Tauri command)
 #[tauri::command]
-fn restart_sidecar(app_handle: tauri::AppHandle) -> Result<(), String> {
+async fn restart_sidecar(state: tauri::State<'_, AppState>) -> Result<(), String> {
     tracing::info!("Restarting sidecar...");
-    stop_sidecar();
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    start_sidecar(&app_handle);
-    
-    // Check if sidecar is healthy
-    for _ in 0..10 {
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        if let Ok(resp) = reqwest::blocking::get("http://localhost:8857/health") {
-            if resp.status().is_success() {
-                return Ok(());
-            }
-        }
-    }
-    Err("Sidecar failed to start".to_string())
+    let manager = state.sidecar_manager.read().await;
+    manager.restart().await.map_err(|e| e.to_user_message())
+}
+
+/// Get sidecar status (Tauri command)
+#[tauri::command]
+async fn get_sidecar_status(state: tauri::State<'_, AppState>) -> Result<services::SidecarStatusInfo, String> {
+    let manager = state.sidecar_manager.read().await;
+    Ok(manager.get_status_info().await)
 }
 
 /// Configure and run the Tauri application
@@ -245,9 +135,6 @@ pub fn run() {
 
             tracing::info!("PubCast application starting...");
 
-            // Start playwright sidecar
-            start_sidecar(app.handle());
-
             // Get app data directory
             let data_dir = app
                 .path()
@@ -257,8 +144,17 @@ pub fn run() {
             // Initialize state asynchronously
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                match AppState::init(data_dir).await {
+                match AppState::init(&handle, data_dir).await {
                     Ok(state) => {
+                        // Start sidecar asynchronously
+                        let sidecar_manager = state.sidecar_manager.clone();
+                        tokio::spawn(async move {
+                            match sidecar_manager.read().await.start().await {
+                                Ok(_) => tracing::info!("Sidecar started successfully"),
+                                Err(e) => tracing::error!("Failed to start sidecar: {}", e),
+                            }
+                        });
+
                         handle.manage(state);
                         tracing::info!("PubCast application initialized successfully");
                     }
@@ -327,12 +223,22 @@ pub fn run() {
             commands::restore_auth_to_browser,
             // Sidecar commands
             restart_sidecar,
+            get_sidecar_status,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
-                stop_sidecar();
+                // Stop sidecar on exit
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    tauri::async_runtime::block_on(async {
+                        if let Ok(manager) = state.sidecar_manager.try_read() {
+                            if let Err(e) = manager.stop().await {
+                                tracing::error!("Failed to stop sidecar: {}", e);
+                            }
+                        }
+                    });
+                }
             }
         });
 }
