@@ -1,9 +1,12 @@
+mod log_manager;
 mod types;
 
+pub use log_manager::{LogFileInfo, LogManager};
 pub use types::*;
 
 use std::sync::Arc;
 use tauri::Manager;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::RwLock;
 use std::time::Instant;
@@ -16,6 +19,8 @@ pub struct SidecarManager {
     config: SidecarConfig,
     /// 进程句柄（仅在 Running 状态时存在）
     child: Arc<RwLock<Option<tokio::process::Child>>>,
+    /// 日志管理器
+    log_manager: Arc<LogManager>,
 }
 
 impl SidecarManager {
@@ -44,6 +49,12 @@ impl SidecarManager {
             ..Default::default()
         };
 
+        // 初始化日志管理器
+        let log_manager = Arc::new(
+            LogManager::new(config.log_dir.clone())
+                .map_err(|e| SidecarError::Other(format!("Failed to create LogManager: {}", e)))?
+        );
+
         tracing::info!(
             "SidecarManager initialized with config: port={}, sidecar_dir={}, log_dir={}",
             config.port,
@@ -55,6 +66,7 @@ impl SidecarManager {
             state: Arc::new(RwLock::new(SidecarState::Stopped)),
             config,
             child: Arc::new(RwLock::new(None)),
+            log_manager,
         })
     }
 
@@ -110,12 +122,41 @@ impl SidecarManager {
         self.update_progress(StartStage::SpawningProcess, "启动 Sidecar 进程...")
             .await;
 
-        let child = self.spawn_process().await?;
+        let mut child = self.spawn_process().await?;
         let pid = child.id().ok_or_else(|| {
             SidecarError::ProcessSpawn("Failed to get process ID".to_string())
         })?;
 
         tracing::info!("Sidecar spawned with PID: {}", pid);
+
+        // 启动日志收集任务
+        if let Some(stdout) = child.stdout.take() {
+            let log_manager = self.log_manager.clone();
+            tokio::spawn(async move {
+                let reader = BufReader::new(stdout);
+                let mut lines = reader.lines();
+
+                while let Ok(Some(line)) = lines.next_line().await {
+                    if let Err(e) = log_manager.write_stdout(line).await {
+                        tracing::warn!("Failed to write stdout log: {}", e);
+                    }
+                }
+            });
+        }
+
+        if let Some(stderr) = child.stderr.take() {
+            let log_manager = self.log_manager.clone();
+            tokio::spawn(async move {
+                let reader = BufReader::new(stderr);
+                let mut lines = reader.lines();
+
+                while let Ok(Some(line)) = lines.next_line().await {
+                    if let Err(e) = log_manager.write_stderr(line).await {
+                        tracing::warn!("Failed to write stderr log: {}", e);
+                    }
+                }
+            });
+        }
 
         // 保存进程句柄
         *self.child.write().await = Some(child);
@@ -259,6 +300,28 @@ impl SidecarManager {
             .map_err(|e| SidecarError::ProcessSpawn(format!("Failed to spawn process: {}", e)))?;
 
         Ok(child)
+    }
+
+    /// 获取最近的日志
+    pub fn get_logs(&self, log_type: &str, lines: usize) -> Result<Vec<String>, SidecarError> {
+        self.log_manager
+            .get_recent_logs(log_type, lines)
+            .map_err(|e| SidecarError::Other(format!("Failed to get logs: {}", e)))
+    }
+
+    /// 获取所有日志文件列表
+    pub fn list_log_files(&self) -> Result<Vec<LogFileInfo>, SidecarError> {
+        self.log_manager
+            .list_log_files()
+            .map_err(|e| SidecarError::Other(format!("Failed to list log files: {}", e)))
+    }
+
+    /// 清空所有日志
+    pub async fn clear_logs(&self) -> Result<(), SidecarError> {
+        self.log_manager
+            .clear_all_logs()
+            .await
+            .map_err(|e| SidecarError::Other(format!("Failed to clear logs: {}", e)))
     }
 
     /// 等待健康检查通过

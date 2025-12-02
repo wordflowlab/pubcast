@@ -17,5 +17,5 @@ pub use browser::BrowserService;
 pub use content::{ContentService, ContentApiConfig};
 pub use proxy::ProxyService;
 pub use scheduler::SchedulerService;
-pub use sidecar_manager::{SidecarManager, SidecarStatusInfo, SidecarError};
+pub use sidecar_manager::{LogFileInfo, SidecarManager, SidecarStatusInfo, SidecarError};
 pub use stats::StatsService;

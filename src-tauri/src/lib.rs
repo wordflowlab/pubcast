@@ -117,6 +117,35 @@ async fn get_sidecar_status(state: tauri::State<'_, AppState>) -> Result<service
     Ok(manager.get_status_info().await)
 }
 
+/// Get sidecar logs (Tauri command)
+#[tauri::command]
+async fn get_sidecar_logs(
+    state: tauri::State<'_, AppState>,
+    log_type: String,
+    lines: Option<usize>,
+) -> Result<Vec<String>, String> {
+    let manager = state.sidecar_manager.read().await;
+    manager
+        .get_logs(&log_type, lines.unwrap_or(100))
+        .map_err(|e| e.to_user_message())
+}
+
+/// List sidecar log files (Tauri command)
+#[tauri::command]
+async fn list_sidecar_log_files(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<services::LogFileInfo>, String> {
+    let manager = state.sidecar_manager.read().await;
+    manager.list_log_files().map_err(|e| e.to_user_message())
+}
+
+/// Clear sidecar logs (Tauri command)
+#[tauri::command]
+async fn clear_sidecar_logs(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let manager = state.sidecar_manager.read().await;
+    manager.clear_logs().await.map_err(|e| e.to_user_message())
+}
+
 /// Configure and run the Tauri application
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -224,6 +253,9 @@ pub fn run() {
             // Sidecar commands
             restart_sidecar,
             get_sidecar_status,
+            get_sidecar_logs,
+            list_sidecar_log_files,
+            clear_sidecar_logs,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
