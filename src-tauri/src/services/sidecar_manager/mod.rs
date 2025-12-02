@@ -226,18 +226,7 @@ impl SidecarManager {
                 // 取出进程句柄
                 let mut child_opt = self.child.write().await;
                 if let Some(mut child) = child_opt.take() {
-                    // 尝试优雅停止
-                    match child.kill().await {
-                        Ok(_) => {
-                            tracing::info!("Sent kill signal to sidecar");
-                            // 等待进程退出
-                            let _ = child.wait().await;
-                            tracing::info!("Sidecar stopped successfully");
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to kill sidecar: {}", e);
-                        }
-                    }
+                    self.graceful_shutdown(&mut child, pid).await?;
                 }
 
                 // 更新状态为 Stopped
@@ -250,6 +239,113 @@ impl SidecarManager {
                 Ok(())
             }
             _ => Err(SidecarError::NotRunning),
+        }
+    }
+
+    /// 优雅关闭进程
+    async fn graceful_shutdown(&self, child: &mut tokio::process::Child, pid: u32) -> Result<(), SidecarError> {
+        #[cfg(unix)]
+        {
+            use nix::sys::signal::{kill, Signal};
+            use nix::unistd::Pid;
+
+            // 1. 发送 SIGTERM（优雅关闭信号）
+            tracing::info!("Sending SIGTERM to sidecar (PID: {})...", pid);
+
+            let nix_pid = Pid::from_raw(pid as i32);
+            if let Err(e) = kill(nix_pid, Signal::SIGTERM) {
+                tracing::warn!("Failed to send SIGTERM: {}", e);
+                // SIGTERM 失败，直接 SIGKILL
+                return self.force_kill(child, pid).await;
+            }
+
+            // 2. 等待进程退出（带超时）
+            tracing::debug!("Waiting for graceful shutdown (timeout: {:?})...", self.config.shutdown_timeout);
+
+            let shutdown_result = tokio::time::timeout(
+                self.config.shutdown_timeout,
+                child.wait()
+            ).await;
+
+            match shutdown_result {
+                Ok(Ok(status)) => {
+                    tracing::info!("Sidecar exited gracefully with status: {:?}", status);
+                    Ok(())
+                }
+                Ok(Err(e)) => {
+                    tracing::warn!("Error waiting for sidecar exit: {}", e);
+                    Err(SidecarError::Other(format!("Wait error: {}", e)))
+                }
+                Err(_) => {
+                    // 3. 超时，发送 SIGKILL（强制终止）
+                    tracing::warn!("Graceful shutdown timeout, sending SIGKILL...");
+                    self.force_kill(child, pid).await
+                }
+            }
+        }
+
+        #[cfg(not(unix))]
+        {
+            // Windows: 直接使用 kill (相当于 TerminateProcess)
+            tracing::info!("Terminating sidecar (PID: {})...", pid);
+
+            match child.kill().await {
+                Ok(_) => {
+                    tracing::info!("Sent termination signal to sidecar");
+                    // 等待进程退出（带超时）
+                    let shutdown_result = tokio::time::timeout(
+                        self.config.shutdown_timeout,
+                        child.wait()
+                    ).await;
+
+                    match shutdown_result {
+                        Ok(Ok(status)) => {
+                            tracing::info!("Sidecar exited with status: {:?}", status);
+                            Ok(())
+                        }
+                        Ok(Err(e)) => {
+                            tracing::warn!("Error waiting for sidecar exit: {}", e);
+                            Err(SidecarError::Other(format!("Wait error: {}", e)))
+                        }
+                        Err(_) => {
+                            tracing::warn!("Shutdown timeout reached");
+                            Ok(()) // 已发送终止信号，认为成功
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to terminate sidecar: {}", e);
+                    Err(SidecarError::Other(format!("Termination failed: {}", e)))
+                }
+            }
+        }
+    }
+
+    /// 强制终止进程（SIGKILL）
+    #[cfg(unix)]
+    async fn force_kill(&self, child: &mut tokio::process::Child, pid: u32) -> Result<(), SidecarError> {
+        use nix::sys::signal::{kill, Signal};
+        use nix::unistd::Pid;
+
+        tracing::info!("Force killing sidecar (PID: {})...", pid);
+
+        let nix_pid = Pid::from_raw(pid as i32);
+        if let Err(e) = kill(nix_pid, Signal::SIGKILL) {
+            tracing::error!("Failed to send SIGKILL: {}", e);
+            return Err(SidecarError::Other(format!("SIGKILL failed: {}", e)));
+        }
+
+        // 等待进程退出
+        match child.wait().await {
+            Ok(status) => {
+                tracing::info!("Sidecar force killed, exit status: {:?}", status);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!("Error waiting after SIGKILL: {}", e);
+                // SIGKILL 通常不会失败，即使 wait 失败也认为成功
+                Ok(())
+            }
         }
     }
 
