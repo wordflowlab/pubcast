@@ -1,15 +1,17 @@
+mod health_checker;
 mod log_manager;
 mod types;
 
+pub use health_checker::{HealthCheckConfig, HealthChecker};
 pub use log_manager::{LogFileInfo, LogManager};
 pub use types::*;
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tauri::Manager;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::RwLock;
-use std::time::Instant;
+use tokio::sync::{RwLock, Notify};
 
 /// Sidecar 进程管理器
 pub struct SidecarManager {
@@ -21,6 +23,10 @@ pub struct SidecarManager {
     child: Arc<RwLock<Option<tokio::process::Child>>>,
     /// 日志管理器
     log_manager: Arc<LogManager>,
+    /// 健康检查器
+    health_checker: Arc<HealthChecker>,
+    /// 停止监控信号
+    stop_monitoring: Arc<Notify>,
 }
 
 impl SidecarManager {
@@ -55,6 +61,19 @@ impl SidecarManager {
                 .map_err(|e| SidecarError::Other(format!("Failed to create LogManager: {}", e)))?
         );
 
+        // 初始化健康检查器
+        let health_check_config = HealthCheckConfig {
+            interval: config.health_check_interval,
+            timeout: config.health_check_timeout,
+            failure_threshold: 3,
+            success_threshold: 2,
+        };
+
+        let health_checker = Arc::new(
+            HealthChecker::new(config.port, health_check_config)
+                .map_err(|e| SidecarError::Other(format!("Failed to create HealthChecker: {}", e)))?
+        );
+
         tracing::info!(
             "SidecarManager initialized with config: port={}, sidecar_dir={}, log_dir={}",
             config.port,
@@ -67,6 +86,8 @@ impl SidecarManager {
             config,
             child: Arc::new(RwLock::new(None)),
             log_manager,
+            health_checker,
+            stop_monitoring: Arc::new(Notify::new()),
         })
     }
 
@@ -179,6 +200,9 @@ impl SidecarManager {
 
         tracing::info!("Sidecar started successfully on port {}", self.config.port);
 
+        // 6. 启动后台健康监控
+        self.start_health_monitoring();
+
         Ok(())
     }
 
@@ -195,6 +219,9 @@ impl SidecarManager {
 
                 // 更新状态为 Stopping
                 *self.state.write().await = SidecarState::Stopping;
+
+                // 停止健康监控
+                self.stop_monitoring.notify_waiters();
 
                 // 取出进程句柄
                 let mut child_opt = self.child.write().await;
@@ -326,44 +353,122 @@ impl SidecarManager {
 
     /// 等待健康检查通过
     async fn wait_for_health(&self) -> Result<(), SidecarError> {
-        let start = Instant::now();
-        let endpoint = format!("http://localhost:{}/health", self.config.port);
-        let client = reqwest::Client::builder()
-            .timeout(self.config.health_check_timeout)
-            .build()
-            .map_err(|e| SidecarError::Other(format!("Failed to create HTTP client: {}", e)))?;
+        self.health_checker
+            .wait_until_healthy(self.config.startup_timeout)
+            .await
+            .map_err(|_| SidecarError::StartupTimeout(self.config.startup_timeout))
+    }
 
-        let mut attempts = 0;
+    /// 启动后台健康监控
+    fn start_health_monitoring(&self) {
+        let state = self.state.clone();
+        let health_checker = self.health_checker.clone();
+        let stop_signal = self.stop_monitoring.clone();
+        let config = self.config.clone();
 
-        loop {
-            if start.elapsed() > self.config.startup_timeout {
-                return Err(SidecarError::StartupTimeout(self.config.startup_timeout));
+        tokio::spawn(async move {
+            let mut consecutive_failures = 0;
+            let mut restart_count = 0;
+
+            tracing::info!("Health monitoring started");
+
+            loop {
+                // 等待检查间隔或停止信号
+                tokio::select! {
+                    _ = stop_signal.notified() => {
+                        tracing::info!("Health monitoring stopped");
+                        break;
+                    }
+                    _ = tokio::time::sleep(health_checker.interval()) => {
+                        // 执行健康检查
+                    }
+                }
+
+                // 检查当前状态
+                let current_state = state.read().await.clone();
+                if !matches!(current_state, SidecarState::Running { .. }) {
+                    tracing::debug!("Sidecar not running, stopping health monitoring");
+                    break;
+                }
+
+                // 执行健康检查
+                let is_healthy = health_checker.check_once().await;
+
+                if is_healthy {
+                    // 重置失败计数
+                    if consecutive_failures > 0 {
+                        tracing::info!("Health check recovered after {} failures", consecutive_failures);
+                        consecutive_failures = 0;
+                    }
+                } else {
+                    consecutive_failures += 1;
+                    tracing::warn!(
+                        "Health check failed ({}/{})",
+                        consecutive_failures,
+                        health_checker.failure_threshold()
+                    );
+
+                    // 检查是否达到失败阈值
+                    if consecutive_failures >= health_checker.failure_threshold() {
+                        tracing::error!("Health check failed {} times, attempting restart", consecutive_failures);
+
+                        // 检查是否超过最大重启次数
+                        if restart_count >= config.max_restart_count {
+                            tracing::error!(
+                                "Max restart count ({}) reached, marking as failed",
+                                config.max_restart_count
+                            );
+
+                            *state.write().await = SidecarState::Failed {
+                                error: format!(
+                                    "Health check failed after {} consecutive failures. Max restart count ({}) reached.",
+                                    consecutive_failures, config.max_restart_count
+                                ),
+                                last_attempt: Instant::now(),
+                            };
+                            break;
+                        }
+
+                        // 计算退避时间（指数退避：1s, 2s, 4s, 8s, 16s）
+                        let backoff_secs = 2_u64.pow(restart_count.min(4));
+                        let backoff_duration = Duration::from_secs(backoff_secs);
+
+                        tracing::info!(
+                            "Waiting {:?} before restart (attempt {}/{})",
+                            backoff_duration,
+                            restart_count + 1,
+                            config.max_restart_count
+                        );
+
+                        tokio::time::sleep(backoff_duration).await;
+
+                        // 尝试重启（这里只是标记为失败，实际重启需要外部触发）
+                        // 在实际应用中，可以通过事件总线或回调通知外部进行重启
+                        restart_count += 1;
+
+                        tracing::warn!(
+                            "Sidecar health check failed, needs restart (attempt {}/{})",
+                            restart_count,
+                            config.max_restart_count
+                        );
+
+                        // 更新状态为 Failed，需要外部重启
+                        *state.write().await = SidecarState::Failed {
+                            error: format!(
+                                "Health check failed after {} consecutive failures",
+                                health_checker.failure_threshold()
+                            ),
+                            last_attempt: Instant::now(),
+                        };
+
+                        // 停止监控，等待外部重启
+                        break;
+                    }
+                }
             }
 
-            match client.get(&endpoint).send().await {
-                Ok(resp) if resp.status().is_success() => {
-                    tracing::info!(
-                        "Health check passed after {} attempts ({:?})",
-                        attempts + 1,
-                        start.elapsed()
-                    );
-                    return Ok(());
-                }
-                Ok(resp) => {
-                    tracing::debug!(
-                        "Health check attempt {} failed with status: {}",
-                        attempts + 1,
-                        resp.status()
-                    );
-                }
-                Err(e) => {
-                    tracing::debug!("Health check attempt {} failed: {}", attempts + 1, e);
-                }
-            }
-
-            attempts += 1;
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        }
+            tracing::info!("Health monitoring task exited");
+        });
     }
 }
 
